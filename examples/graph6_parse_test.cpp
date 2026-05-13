@@ -1,7 +1,7 @@
-#include "graph.hpp"
-
 #include <iostream>
 #include <cassert>
+
+#include "graph.hpp"
 
 void test_empty() {
   Graph graph;

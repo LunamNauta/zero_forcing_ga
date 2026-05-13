@@ -1,7 +1,6 @@
 #ifndef GENETIC_ALGORITHM_HEADER
 #define GENETIC_ALGORITHM_HEADER
 
-#include <unordered_set>
 #include <vector>
 
 #include "graph.hpp"
@@ -16,9 +15,9 @@ struct Individual {
 
 class ZFGeneticSolver {
 public:
-  ZFGeneticSolver(const Graph *gi, std::size_t population);
+  ZFGeneticSolver(const Graph *gi, std::size_t population_size);
 
-  std::unordered_set<VertexIndex> run(std::size_t generations);
+  VertexSet run(std::size_t generations);
 
 private:
   const Graph *graph;
@@ -29,10 +28,10 @@ private:
   void crossover_population();
   void mutate_population();
 
-  static Individual crossover_individual(const Individual &ind1, const Individual &ind2);
-  static void mutate_individual(Individual &ind);
+  Individual crossover_individual(const Individual &ind1, const Individual &ind2);
+  void mutate_individual(Individual &ind);
 
-  static std::unordered_set<VertexIndex> chromosome_to_set(const Chromosome& genes);
+  static VertexSet chromosome_to_set(const Chromosome& genes);
 };
 
 #endif

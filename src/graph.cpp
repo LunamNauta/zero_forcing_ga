@@ -480,36 +480,41 @@ std::pair<VertexIndex, VertexIndex> Graph::tree_center() const {
 }
 
 // Zero Forcing ----------------------------------------------------------------
-bool Graph::is_valid_zf(VertexSet &filled) const {
-  zf_closure(filled);
-  return filled.size() == vert_count;
+bool Graph::is_valid_zf(const VertexSet &filled) const {
+  std::size_t pt;
+  zf_closure(filled, &pt);
+  return pt != INVALID_INDEX;
 }
 
-std::size_t Graph::zf_closure(VertexSet &filled) const {
+VertexSet Graph::zf_closure(VertexSet filled, std::size_t *pt) const {
   std::size_t propagation_time;
-	VertexIndex vert;
+  VertexIndex vert;
 
-	for (propagation_time = 0; propagation_time < vert_count; propagation_time++) {
+  for (propagation_time = 0; propagation_time < vert_count; propagation_time++) {
     VertexSet active;
 
-		for (VertexSet::const_iterator it_u = filled.cbegin(); it_u != filled.cend(); it_u++) {
+    for (VertexSet::const_iterator it_u = filled.cbegin(); it_u != filled.cend(); it_u++) {
       std::size_t count = 0;
-
       AdjacencySet neighbors = get_adjacent(*it_u);
-			for (AdjacencySet::const_iterator it_v = neighbors.cbegin(); it_v != neighbors.cend(); it_v++) {
-				if (filled.find(*it_v) != filled.cend()) continue;
-				count++;
-				vert = *it_v;
-			}
-			if (count == 1) active.insert(vert);
-		}
+      
+      for (AdjacencySet::const_iterator it_v = neighbors.cbegin(); it_v != neighbors.cend(); it_v++) {
+        if (filled.find(*it_v) != filled.cend()) continue;
+        count++;
+        vert = *it_v;
+      }
+      if (count == 1) active.insert(vert);
+    }
 
-		if (active.empty()) break;
-		filled.insert(active.cbegin(), active.cend());
-	}
+    if (active.empty()) break;
+    filled.insert(active.cbegin(), active.cend()); 
+  }
 
-	if (filled.size() == vert_count) return propagation_time;
-	return INVALID_INDEX;
+  if (pt) {
+    if (filled.size() == vert_count) *pt = propagation_time;
+    else *pt = INVALID_INDEX;
+  }
+
+  return filled;
 }
 
 std::size_t Graph::zf_wavefront() const {

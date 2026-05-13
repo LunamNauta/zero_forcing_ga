@@ -1,8 +1,9 @@
 #include "fort_cover.hpp"
-#include "graph.hpp"
 
 #include <chrono>
 #include <cmath>
+
+#include "graph.hpp"
 
 violated_fort_testing_v1::violated_fort_testing_v1(const Graph *gi, GRBVar *si, GRBVar *xi, GRBModel *mi, double *smi) : 
   graph(gi), s(si), x(xi), model_sub(mi), sub_model_time(smi)
@@ -20,16 +21,16 @@ void violated_fort_testing_v1::callback() {
       model_sub->remove(model_sub->getConstrByName("dynamic_constr"));
       model_sub->update();
 
-      std::unordered_set<VertexIndex> filled;
+      VertexSet filled;
       for (std::size_t a = 0; a < graph->get_order(); a++){
         if (getSolution(s[a]) <= 0.5) continue;
         filled.insert(a);
       }
 
-      int pt = graph->zf_closure(filled);
+      filled = graph->zf_closure(filled);
         
       GRBLinExpr expr = 0;
-      for (std::unordered_set<VertexIndex>::const_iterator it = filled.cbegin(); it != filled.cend(); it++){
+      for (VertexSet::const_iterator it = filled.cbegin(); it != filled.cend(); it++){
         expr += x[*it];
       }
 
@@ -122,18 +123,18 @@ void violated_fort_testing_v3::callback() {
       std::chrono::microseconds duration;
       start = std::chrono::high_resolution_clock::now();
 
-      std::unordered_set<VertexIndex> filled;
+      VertexSet filled;
       for (std::size_t a = 0; a < graph->get_order(); a++) {
         if (getSolution(s[a]) <= 0.5) continue;
         filled.insert(a);
       }
 
-      int pt = graph->zf_closure(filled);
+      filled = graph->zf_closure(filled);
 
       // If filled is not entire vertex set, add fort constraint to main model
       if (filled.size() >= graph->get_order()) return;
 
-      std::unordered_set<VertexIndex> verts;
+      VertexSet verts;
       for (std::size_t a = 0; a < graph->get_order(); a++) {
         if (filled.find(a) != filled.cend()) continue;
         verts.insert(a);
@@ -294,7 +295,7 @@ void fort_cover_ip(const Graph &graph, fort_cover_data &data, const int call_typ
 
     // Extract solution only if optimal
     data.status = model_main.get(GRB_IntAttr_Status);
-    data.zf_set = std::unordered_set<VertexIndex>();
+    data.zf_set = VertexSet();
     data.val = -1;
 
     if (data.status == GRB_OPTIMAL) {

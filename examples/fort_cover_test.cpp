@@ -64,6 +64,4 @@ int main() {
   std::cout << "Type 2: " << submodel_type2_time / num_tests << "s" << "\n";
   std::cout << "Type 3: " << submodel_type3_time / num_tests << "s" << "\n";
   std::cout << "========================================" << "\n";
-
-  return 0;
 }
