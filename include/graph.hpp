@@ -44,24 +44,24 @@ public:
   std::size_t get_vertex_count() const;
   std::size_t get_edge_count() const;
 
-  std::size_t get_degree(Vertex vert) const;
+  std::size_t get_degree(Vertex u) const;
   std::size_t get_max_degree() const;
-  Vertex get_label(Vertex vert) const;
-  VertexSet get_adjacent(Vertex vert) const;
+  Vertex get_label(Vertex u) const;
+  VertexSet get_adjacent(Vertex u) const;
 
   // Query ----------------------------------------------------------------
-  bool has_edge(Vertex vert1, Vertex vert2);
+  bool has_edge(Vertex u, Vertex v);
 
   std::vector<Vertex> get_vertices() const;
   std::vector<Edge> get_edges() const;
 
   // Insertion ----------------------------------------------------------------
-  void insert_edge(Vertex vert1, Vertex vert2);
+  void insert_edge(Vertex u, Vertex v);
   void insert_vertex(std::size_t count = 1);
 
   // Erasure ----------------------------------------------------------------
-  void erase_edge(Vertex vert1, Vertex vert2);
-  void erase_vertex(Vertex vert);
+  void erase_edge(Vertex u, Vertex v);
+  void erase_vertex(Vertex u);
 
   // Tree ----------------------------------------------------------------
   bool is_valid_forest() const;

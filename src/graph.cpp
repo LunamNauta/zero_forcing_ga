@@ -115,11 +115,13 @@ Vertex _bfs_farthest(const Graph &graph, Vertex start, std::size_t &max_dist) {
 
 // Initialization ----------------------------------------------------------------
 Graph::Graph() : 
-  vert_count(0), edge_count(0)
+  vert_count(0),
+  edge_count(0)
 {}
 
 Graph::Graph(std::size_t ord, bool label) :
-  vert_count(ord), edge_count(0)
+  vert_count(ord),
+  edge_count(0)
 { 
   assert(ord > 0);
   labels.resize(ord);

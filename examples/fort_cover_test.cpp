@@ -1,21 +1,58 @@
 #include <iostream>
 
+#include <nauty/naututil.h>
+#include <nauty/gtools.h>
+#include <nauty/nauty.h>
+
 #include "zero_forcing.hpp"
 #include "fort_cover.hpp"
+#include "graph.hpp"
 
-void generate_cubic_prism(Graph& g, int n) {
-  g = Graph(2*n);
-  // Add 2n vertices and connect them in two rings with cross-edges
-  for (std::size_t a = 0; a < n; a++) {
-    g.insert_edge(a, (a + 1) % n);         // Inner ring
-    g.insert_edge(a + n, (a + 1) % n + n); // Outer ring
-    g.insert_edge(a, a + n);               // Spokes connecting rings
+std::vector<std::string> generate_random_graph6(int num_graphs, int n) {
+  std::vector<std::string> results;
+  int m = SETWORDSNEEDED(n);
+    
+  nauty_check(WORDSIZE, m, n, NAUTYVERSIONID);
+
+  char* buffer = nullptr;
+  size_t size = 0;
+
+  for (std::size_t a = 0; a < num_graphs; a++) {
+    DYNALLSTAT(graph, g, g_sz);
+    DYNALLOC2(graph, g, g_sz, m, n, "Allocation failed");
+    EMPTYGRAPH(g, m, n);
+
+    for (int v = 0; v < n; ++v) {
+      for (int w = v + 1; w < n; ++w) {
+        if ((double)rand() / RAND_MAX <= 0.5) continue;
+        ADDONEEDGE(g, v, w, m);
+      }
+    }
+
+    FILE* mem_stream = open_memstream(&buffer, &size);
+    if (mem_stream) {
+      writeg6(mem_stream, g, m, n);
+      fclose(mem_stream);
+            
+      std::string g6_str(buffer);
+      if (!g6_str.empty() && g6_str.back() == '\n') {
+        g6_str.pop_back();
+      }
+      results.push_back(g6_str);
+            
+      free(buffer);
+      buffer = nullptr;
+    }
+
+    DYNFREE(g, g_sz);
   }
+
+  return results;
 }
 
 int main() {
   Graph graph;
-  fort_cover_data fc_data;
+  FortCoverData fc_data;
   std::size_t z;
   
   double submodel_type1_time = 0;
@@ -25,9 +62,9 @@ int main() {
   const int num_tests = 5;
 
   for (int a = 1; a <= num_tests; a++) {
-    // Instead of loading from file, generate a cubic graph
-    int vertices_per_ring = 4 + a; 
-    generate_cubic_prism(graph, vertices_per_ring);
+    // Instead of loading from file, generate a ramndom, graph
+    int vertices_per_ring = 4 + a;
+    graph.from_graph6(generate_random_graph6(1, 20)[0]);
     
     std::cout << "\n--- Testing Cubic Prism Graph (n=" << graph.get_order() << ") ---" << "\n";
 

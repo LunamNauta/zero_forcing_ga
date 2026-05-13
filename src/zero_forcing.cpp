@@ -1,5 +1,7 @@
 #include "zero_forcing.hpp"
 
+#include <list>
+
 bool is_valid_zero_forcing(const Graph &graph, const VertexSet &filled) {
   return zero_forcing_closure(graph, filled).size() == graph.get_order();
 }
@@ -36,51 +38,56 @@ VertexSet zero_forcing_closure(const Graph &graph, VertexSet filled, std::size_t
 std::size_t zero_forcing_wavefront(const Graph &graph) {
   if (graph.get_order() == 0) return 0;
 
-  typedef std::pair<VertexSet, std::size_t> ZFSolution;
-  std::vector<ZFSolution> cl_pairs;
-  cl_pairs.emplace_back(VertexSet(), 0);
+	std::list<std::pair<VertexSet, std::size_t>> cl_pairs;
+	cl_pairs.push_back(std::pair<VertexSet, std::size_t>({}, 0));
 
-  for (std::size_t rank_limit = 1; rank_limit <= graph.get_order(); rank_limit++) {
-    for (std::vector<ZFSolution>::const_iterator it = cl_pairs.cbegin(); it != cl_pairs.cend(); it++) {
-      auto [source, source_rank] = *it;
+	for (std::size_t R = 1; R <= graph.get_order(); R++) {
+		for (auto j = cl_pairs.cbegin(); j != cl_pairs.cend(); j++) {
+			const VertexSet &S = j->first;
+			std::size_t r = j->second;
 
-      for (Vertex u = 0; u < graph.get_order(); u++) {
-        VertexSet candidate(source.cbegin(), source.cend());
+			for (Vertex v = 0; v < graph.get_order(); v++) {
+				VertexSet S_new(S.cbegin(), S.cend());
 
-        candidate.insert(u);
-        VertexSet neighbors = graph.get_adjacent(u);
-        candidate.insert(neighbors.cbegin(), neighbors.cend());
+				S_new.insert(v);
 
-        zero_forcing_closure(graph, candidate);
+				VertexSet neighbors = graph.get_adjacent(v);
+				S_new.insert(neighbors.cbegin(), neighbors.cend());
 
-        std::size_t candidate_rank = source_rank;
-        if (source.find(u) == source.cend()) candidate_rank++;
+				S_new = std::move(zero_forcing_closure(graph,S_new));
 
-        int neighbors_outside_source = 0;
-        for (VertexSet::const_iterator it = neighbors.cbegin(); it != neighbors.cend(); it++) {
-          if (source.find(*it) != source.cend()) continue;
-          neighbors_outside_source++;
-        }
+				std::size_t r_new = r;
+				if (S.find(v) == S.cend()) r_new++;
 
-        if (neighbors_outside_source > 1) candidate_rank += (neighbors_outside_source - 1);
+				std::size_t neighbors_outside_S = 0;
+				for (VertexSet::const_iterator it = neighbors.cbegin(); it != neighbors.cend(); it++) {
+					if (S.find(*it) != S.cend()) continue;
 
-        if (candidate_rank <= rank_limit) {
-          bool already_present = false;
+					neighbors_outside_S++;
+				}
 
-          for (std::vector<ZFSolution>::const_iterator it = cl_pairs.cbegin(); it != cl_pairs.cend(); it++) {
-            if (it->first != candidate || it->second > candidate_rank) continue;
-            already_present = true;
-            break;
-          }
+				if (neighbors_outside_S > 1) r_new += (neighbors_outside_S - 1);
 
-          if (!already_present) {
-            cl_pairs.emplace_back(candidate, candidate_rank);
-            if (candidate.size() == graph.get_order()) return candidate_rank;
-          }
-        }
-      }
-    }
-  }
+				if (r_new <= R) {
+					bool already_present = false;
 
-  return graph.get_order();
+					for (auto it = cl_pairs.cbegin(); it != cl_pairs.cend(); it++) {
+						if (it->first != S_new || it->second > r_new) continue;
+
+						already_present = true;
+						break;
+					}
+
+					if (!already_present) {
+						cl_pairs.push_back(std::pair<VertexSet, int>(S_new, r_new));
+
+						if (S_new.size() == graph.get_order()) return r_new;
+					}
+				}
+			}
+		}
+	}
+
+	return graph.get_order();
+;
 }

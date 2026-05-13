@@ -1,12 +1,13 @@
 #include <iostream>
 #include <cassert>
 
-#include "genetic_algorithm.hpp"
-#include "graph.hpp"
-
 #include <nauty/naututil.h>
 #include <nauty/gtools.h>
 #include <nauty/nauty.h>
+
+#include "genetic_algorithm.hpp"
+#include "graph.hpp"
+#include "zero_forcing.hpp"
 
 std::vector<std::string> generate_random_graph6(int num_graphs, int n) {
   std::vector<std::string> results;
@@ -50,23 +51,22 @@ std::vector<std::string> generate_random_graph6(int num_graphs, int n) {
   return results;
 }
 
-// 10 -> 0.25
-// 20 -> 0.5
-// 40 -> 2.5
-// 80 -> 23
-
 int main() {
-  std::vector<std::string> graph_strs = generate_random_graph6(100, 40);
+  std::vector<std::string> graph_strs = generate_random_graph6(100, 20);
   Graph graph;
 
   for (const std::string &graph6 : graph_strs) {
     graph.from_graph6(graph6);
 
     ZFGeneticSolver solver(&graph, 100);
-    VertexSet result = solver.run(100);
+    VertexSet result = solver.run(200);
+
+    std::size_t expected = zero_forcing_wavefront(graph);
 
     std::cout << "Graph: " << graph6 << "\n";
-    std::cout << "Z(G): " << result.size() << "\n";
+    std::cout << "Real Z(G): " << expected << "\n";
+    std::cout << "Observed Z(G): " << result.size() << "\n";
+    std::cout << "Delta: " << ((std::int64_t)expected - (std::int64_t)result.size()) << "\n\n";
   }
 
 }
