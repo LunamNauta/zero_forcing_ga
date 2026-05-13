@@ -50,7 +50,7 @@ void _parse_sparse6_data(std::size_t order, std::size_t count, const char *edges
   std::size_t bits_left_in_byte = 0;
   std::size_t current_byte = 0;
 
-  auto get_next_bit = [&]() mutable -> bool {
+  auto get_next_bit = [&]() -> bool {
     if (bits_left_in_byte == 0) {
       current_byte = static_cast<unsigned char>(edges[current_byte_idx++]);
       bits_left_in_byte = 6;
@@ -59,7 +59,7 @@ void _parse_sparse6_data(std::size_t order, std::size_t count, const char *edges
     return (current_byte >> bits_left_in_byte) & 1;
   };
 
-  auto get_next_k_bits = [&](std::size_t bit_count) mutable -> VertexIndex {
+  auto get_next_k_bits = [&](std::size_t bit_count) -> VertexIndex {
     VertexIndex val = 0;
     for (std::size_t i = 0; i < bit_count; ++i) {
       val = (val << 1) | (get_next_bit() ? 1 : 0);
