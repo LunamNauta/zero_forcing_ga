@@ -61,7 +61,7 @@ void _parse_sparse6_data(std::size_t order, std::size_t count, const char *edges
 
   auto get_next_k_bits = [&](std::size_t bit_count) -> Vertex {
     Vertex val = 0;
-    for (std::size_t i = 0; i < bit_count; ++i) {
+    for (std::size_t a = 0; a < bit_count; a++) {
       val = (val << 1) | (get_next_bit() ? 1 : 0);
     }
     return val;
@@ -92,21 +92,21 @@ Vertex _bfs_farthest(const Graph &graph, Vertex start, std::size_t &max_dist) {
 	max_dist = 0;
 
 	while (!queue.empty()) {
-    Vertex vert1 = queue.front();
+    Vertex u = queue.front();
 		queue.pop();
 
-		if (dist[vert1] > max_dist) {
-			max_dist = dist[vert1];
-			farthest = vert1;
+		if (dist[u] > max_dist) {
+			max_dist = dist[u];
+			farthest = u;
 		}
 
-    VertexSet neighbors = graph.get_adjacent(vert1);
-		for (VertexSet::const_iterator it = neighbors.cbegin(); it != neighbors.cend(); it++) {
-			Vertex vert2 = *it;
-			if (visited[vert2]) continue;
-			visited[vert2] = true;
-			dist[vert2] = dist[vert1] + 1;
-			queue.push(vert2);
+    VertexSet neighbors = graph.get_adjacent(u);
+		for (VertexSet::const_iterator it_v = neighbors.cbegin(); it_v != neighbors.cend(); it_v++) {
+			Vertex v = *it_v;
+			if (visited[v]) continue;
+			visited[v] = true;
+			dist[v] = dist[u] + 1;
+			queue.push(v);
 		}
 	}
 
@@ -255,8 +255,8 @@ Graph Graph::subgraph(const VertexSet &vertices) const {
   std::unordered_map<Vertex, Vertex> old_to_new;
 
   std::size_t idx = 0;
-  for (VertexSet::const_iterator it = vertices.cbegin(); it != vertices.cend(); it++) {
-    Vertex old_v = *it;
+  for (VertexSet::const_iterator it_v = vertices.cbegin(); it_v != vertices.cend(); it_v++) {
+    Vertex old_v = *it_v;
     old_to_new[old_v] = idx;
     induced.labels[idx] = old_v;
     idx++;
