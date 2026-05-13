@@ -63,17 +63,17 @@ int main() {
 
   for (int a = 1; a <= num_tests; a++) {
     // Instead of loading from file, generate a ramndom, graph
-    int vertices_per_ring = 4 + a;
-    graph.from_graph6(generate_random_graph6(1, 20)[0]);
+    std::string graph6 = generate_random_graph6(1, 20)[0];
+    graph.from_graph6(graph6);
     
-    std::cout << "\n--- Testing Cubic Prism Graph (n=" << graph.get_order() << ") ---" << "\n";
+    std::cout << "\nTesting Graph: " << graph6 << "\n";
 
     // Version 1
     fort_cover_ip(graph, fc_data, 1);
     submodel_type1_time += fc_data.sub_model_time;
     z = zero_forcing_wavefront(graph);
     if (z != fc_data.val) {
-      std::cout << "error: wavefront (" << z << ") != fort cover (" << fc_data.val << ")" << "\n";
+      std::cout << "Error: wavefront (" << z << ") != fort cover (" << fc_data.val << ")" << "\n";
       return -1;
     }
 
@@ -82,7 +82,7 @@ int main() {
     submodel_type2_time += fc_data.sub_model_time;
     z = zero_forcing_wavefront(graph);
     if (z != fc_data.val) {
-      std::cout << "error: wavefront (" << z << ") != fort cover (" << fc_data.val << ")" << "\n";
+      std::cout << "Error: wavefront (" << z << ") != fort cover (" << fc_data.val << ")" << "\n";
       return -1;
     }
 
@@ -91,7 +91,7 @@ int main() {
     submodel_type3_time += fc_data.sub_model_time;
     z = zero_forcing_wavefront(graph);
     if (z != fc_data.val) {
-      std::cout << "error: wavefront (" << z << ") != fort cover (" << fc_data.val << ")" << "\n";
+      std::cout << "Error: wavefront (" << z << ") != fort cover (" << fc_data.val << ")" << "\n";
       return -1;
     }
   }
