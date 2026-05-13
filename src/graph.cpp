@@ -124,6 +124,7 @@ Graph::Graph(std::size_t ord, bool label) :
   assert(ord > 0);
   labels.resize(ord);
   if (label) std::iota(labels.begin(), labels.end(), 0);
+  adj.resize(ord);
 }
 
 void Graph::clear() {
@@ -479,12 +480,12 @@ std::pair<VertexIndex, VertexIndex> Graph::tree_center() const {
 }
 
 // Zero Forcing ----------------------------------------------------------------
-bool Graph::is_valid_zf(VertexSet &filled) {
+bool Graph::is_valid_zf(VertexSet &filled) const {
   zf_closure(filled);
   return filled.size() == vert_count;
 }
 
-std::size_t Graph::zf_closure(VertexSet &filled) {
+std::size_t Graph::zf_closure(VertexSet &filled) const {
   std::size_t propagation_time;
 	VertexIndex vert;
 
@@ -511,7 +512,7 @@ std::size_t Graph::zf_closure(VertexSet &filled) {
 	return INVALID_INDEX;
 }
 
-std::size_t Graph::zf_wavefront(const Graph &graph) {
+std::size_t Graph::zf_wavefront() const {
   if (vert_count == 0) return 0;
 
   typedef std::pair<VertexSet, std::size_t> ZFSolution;

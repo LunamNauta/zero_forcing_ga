@@ -71,9 +71,9 @@ public:
   std::pair<VertexIndex, VertexIndex> tree_center() const;
 
   // Zero Forcing ----------------------------------------------------------------
-  bool is_valid_zf(VertexSet &filled);
-  std::size_t zf_closure(VertexSet &filled);
-  std::size_t zf_wavefront(const Graph &graph);
+  bool is_valid_zf(VertexSet &filled) const;
+  std::size_t zf_closure(VertexSet &filled) const;
+  std::size_t zf_wavefront() const;
 
   // Misc ----------------------------------------------------------------
   VertexSet get_pendants() const;

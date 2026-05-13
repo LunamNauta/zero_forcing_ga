@@ -14,7 +14,7 @@ set(GUROBI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../gurobi/gurobi1103/linux64")
 set(GUROBI_INC "${GUROBI_DIR}/include")
 set(GUROBI_LIB_DIR "${GUROBI_DIR}/lib")
 
-add_compile_options(-O3 -march=native -mtune=native)
+add_compile_options(-O3 -march=native -mtune=native -g)
 
 include_directories(include)
 include_directories(${GUROBI_INC})
