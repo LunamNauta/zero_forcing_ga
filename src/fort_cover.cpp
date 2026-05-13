@@ -211,7 +211,7 @@ void violated_fort_testing_v3::callback() {
   }
 }
 
-void fort_cover_ip(const Graph &graph, fort_cover_data &data, const int call_type) {
+void fort_cover_ip(const Graph &graph, fort_cover_data &data, int call_type) {
   try {
     // Main model ----------------------------------------------------------------
     GRBEnv env_main(true);
