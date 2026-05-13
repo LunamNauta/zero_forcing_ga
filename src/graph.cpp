@@ -249,7 +249,7 @@ void Graph::from_edge_list(const std::ifstream &file) {
   return from_edge_list(_file_to_string(file));
 }
 
-Graph Graph::subgraph(const VertexSet &vertices) {
+Graph Graph::subgraph(const VertexSet &vertices) const {
   Graph induced(vertices.size(), false);
   std::unordered_map<VertexIndex, VertexIndex> old_to_new;
 

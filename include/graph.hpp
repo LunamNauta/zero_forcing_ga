@@ -38,7 +38,7 @@ public:
   void from_sparse6(const std::ifstream &file);
   void from_edge_list(const std::ifstream &file);
 
-  Graph subgraph(const std::unordered_set<VertexIndex> &vertices);
+  Graph subgraph(const std::unordered_set<VertexIndex> &vertices) const;
 
   // Element Access ----------------------------------------------------------------
   std::size_t get_order() const;
