@@ -3,7 +3,15 @@
 #include <algorithm>
 #include <random>
 
-ZFGeneticSolver::ZFGeneticSolver(const Graph *gi, std::size_t population_size) : graph(gi), population(population_size) {
+#include "random_sampler.hpp"
+#include "zero_forcing.hpp"
+#include "graph.hpp"
+
+ZFGeneticSolver::ZFGeneticSolver(const Graph *gi, std::size_t population_size) :
+  graph(gi),
+  population(population_size),
+  sampler(gi)
+{
   initialize_population();
 }
 
@@ -24,7 +32,7 @@ void ZFGeneticSolver::score_population() {
     VertexSet start_nodes = chromosome_to_set(ind.genes);
     ind.size = start_nodes.size();
 
-    VertexSet forced_nodes = graph->zf_closure(start_nodes);
+    VertexSet forced_nodes = zero_forcing_closure(*graph, start_nodes);
     std::size_t forced_count = forced_nodes.size();
 
     if (forced_count == graph->get_order()) ind.fitness = 1000.0 + (double)(graph->get_order() - ind.size);
@@ -36,7 +44,7 @@ Individual ZFGeneticSolver::crossover_individual(const Individual &ind1, const I
   Individual offspring;
   offspring.genes.assign(graph->get_order(), false);
     
-  std::vector<VertexIndex> parent_union;
+  std::vector<Vertex> parent_union;
 
   for (std::size_t a = 0; a < graph->get_order(); a++) {
     if (ind1.genes[a] && ind2.genes[a]) offspring.genes[a] = true;
@@ -44,17 +52,14 @@ Individual ZFGeneticSolver::crossover_individual(const Individual &ind1, const I
   }
 
   VertexSet current_start = chromosome_to_set(offspring.genes);
-    
-  if (graph->zf_closure(current_start).size() < graph->get_order()) {
-    std::mt19937 gen(std::random_device{}());
-    std::shuffle(parent_union.begin(), parent_union.end(), gen);
 
-    for (VertexIndex vert : parent_union) {
-      if (offspring.genes[vert]) continue;
-      offspring.genes[vert] = true;
-      current_start.insert(vert);
-      if (graph->zf_closure(current_start).size() == graph->get_order()) break;
-    }
+  VertexSet forced = zero_forcing_closure(*graph, current_start);
+    
+  while (forced.size() < graph->get_order()) {
+    VertexSet verts = sampler(1, 100, forced);
+    current_start.insert(*verts.begin());
+    forced.insert(*verts.begin());
+    forced = std::move(zero_forcing_closure(*graph, forced));
   }
 
   offspring.size = current_start.size();

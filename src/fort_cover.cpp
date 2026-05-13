@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 
+#include "zero_forcing.hpp"
 #include "graph.hpp"
 
 violated_fort_testing_v1::violated_fort_testing_v1(const Graph *gi, GRBVar *si, GRBVar *xi, GRBModel *mi, double *smi) : 
@@ -27,7 +28,7 @@ void violated_fort_testing_v1::callback() {
         filled.insert(a);
       }
 
-      filled = graph->zf_closure(filled);
+      filled = zero_forcing_closure(*graph, filled);
         
       GRBLinExpr expr = 0;
       for (VertexSet::const_iterator it = filled.cbegin(); it != filled.cend(); it++){
@@ -129,7 +130,7 @@ void violated_fort_testing_v3::callback() {
         filled.insert(a);
       }
 
-      filled = graph->zf_closure(filled);
+      filled = zero_forcing_closure(*graph, filled);
 
       // If filled is not entire vertex set, add fort constraint to main model
       if (filled.size() >= graph->get_order()) return;
@@ -139,8 +140,8 @@ void violated_fort_testing_v3::callback() {
         if (filled.find(a) != filled.cend()) continue;
         verts.insert(a);
 
-        AdjacencySet neighbors = graph->get_adjacent(a);
-        for (AdjacencySet::const_iterator v = neighbors.cbegin(); v != neighbors.cend(); ++v) {
+        VertexSet neighbors = graph->get_adjacent(a);
+        for (VertexSet::const_iterator v = neighbors.cbegin(); v != neighbors.cend(); ++v) {
           if (filled.find(*v) == filled.cend()) continue;
           verts.insert(*v);
         }
@@ -173,11 +174,11 @@ void violated_fort_testing_v3::callback() {
       }
 
       for (std::size_t a = 0; a < induced.get_order(); a++) {
-        AdjacencySet neighbors1 = induced.get_adjacent(a);
-        for (AdjacencySet::const_iterator it1 = neighbors1.cbegin(); it1 != neighbors1.cend(); it1++) {
-          AdjacencySet neighbors2 = induced.get_adjacent(*it1);
+        VertexSet neighbors1 = induced.get_adjacent(a);
+        for (VertexSet::const_iterator it1 = neighbors1.cbegin(); it1 != neighbors1.cend(); it1++) {
+          VertexSet neighbors2 = induced.get_adjacent(*it1);
           expr = x[*it1] - 2*x[a];
-          for (AdjacencySet::const_iterator it2 = neighbors2.cbegin(); it2 != neighbors2.cend(); it2++) {
+          for (VertexSet::const_iterator it2 = neighbors2.cbegin(); it2 != neighbors2.cend(); it2++) {
             expr += x[*it2];
           }
           model_sub.addConstr(expr, GRB_GREATER_EQUAL, 0);
@@ -254,12 +255,12 @@ void fort_cover_ip(const Graph &graph, fort_cover_data &data, int call_type) {
     model_sub.addConstr(expr, GRB_GREATER_EQUAL, 1);
 
     for (std::size_t a = 0; a < graph.get_order(); a++) {
-      AdjacencySet neighbors1 = graph.get_adjacent(a);
-      for (AdjacencySet::const_iterator it1 = neighbors1.cbegin(); it1 != neighbors1.cend(); it1++) {
+      VertexSet neighbors1 = graph.get_adjacent(a);
+      for (VertexSet::const_iterator it1 = neighbors1.cbegin(); it1 != neighbors1.cend(); it1++) {
         expr = x[*it1] - 2 * x[a];
 
-        AdjacencySet neighbors2 = graph.get_adjacent(*it1);
-        for (AdjacencySet::const_iterator it2 = neighbors2.cbegin(); it2 != neighbors2.cend(); it2++) {
+        VertexSet neighbors2 = graph.get_adjacent(*it1);
+        for (VertexSet::const_iterator it2 = neighbors2.cbegin(); it2 != neighbors2.cend(); it2++) {
           expr += x[*it2];
         }
 

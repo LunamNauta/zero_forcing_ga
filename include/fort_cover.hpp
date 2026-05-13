@@ -11,7 +11,7 @@ struct fort_cover_data {
   int status;
   int val;
   double sub_model_time;
-  std::unordered_set<VertexIndex> zf_set;
+  std::unordered_set<Vertex> zf_set;
 };
 
 class violated_fort_testing_v1: public GRBCallback {

@@ -44,6 +44,7 @@ foreach(FILE_PATH ${EXAMPLE_FILES})
     m 
     dl 
     pthread
+    nauty
   )
 
   set_target_properties(${BIN_NAME} PROPERTIES 

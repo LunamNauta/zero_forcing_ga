@@ -1,5 +1,6 @@
 #include <iostream>
 
+#include "zero_forcing.hpp"
 #include "fort_cover.hpp"
 
 void generate_cubic_prism(Graph& g, int n) {
@@ -33,7 +34,7 @@ int main() {
     // Version 1
     fort_cover_ip(graph, fc_data, 1);
     submodel_type1_time += fc_data.sub_model_time;
-    z = graph.zf_wavefront();
+    z = zero_forcing_wavefront(graph);
     if (z != fc_data.val) {
       std::cout << "error: wavefront (" << z << ") != fort cover (" << fc_data.val << ")" << "\n";
       return -1;
@@ -42,7 +43,7 @@ int main() {
     // Version 2
     fort_cover_ip(graph, fc_data, 2);
     submodel_type2_time += fc_data.sub_model_time;
-    z = graph.zf_wavefront();
+    z = zero_forcing_wavefront(graph);
     if (z != fc_data.val) {
       std::cout << "error: wavefront (" << z << ") != fort cover (" << fc_data.val << ")" << "\n";
       return -1;
@@ -51,7 +52,7 @@ int main() {
     // Version 3
     fort_cover_ip(graph, fc_data, 3);
     submodel_type3_time += fc_data.sub_model_time;
-    z = graph.zf_wavefront();
+    z = zero_forcing_wavefront(graph);
     if (z != fc_data.val) {
       std::cout << "error: wavefront (" << z << ") != fort cover (" << fc_data.val << ")" << "\n";
       return -1;

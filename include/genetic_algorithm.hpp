@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "graph.hpp"
+#include "random_sampler.hpp"
 
 typedef std::vector<bool> Chromosome;
 
@@ -14,14 +15,10 @@ struct Individual {
 };
 
 class ZFGeneticSolver {
-public:
-  ZFGeneticSolver(const Graph *gi, std::size_t population_size);
-
-  VertexSet run(std::size_t generations);
-
 private:
   const Graph *graph;
   std::vector<Individual> population;
+  RandomSampler sampler;
 
   void initialize_population();
   void score_population();
@@ -32,6 +29,11 @@ private:
   void mutate_individual(Individual &ind);
 
   static VertexSet chromosome_to_set(const Chromosome& genes);
+
+public:
+  ZFGeneticSolver(const Graph *gi, std::size_t population_size);
+
+  VertexSet run(std::size_t generations);
 };
 
 #endif

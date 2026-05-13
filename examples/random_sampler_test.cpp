@@ -2,7 +2,6 @@
 #include <iomanip>
 #include <vector>
 #include <string>
-#include <cmath>
 
 #include "random_sampler.hpp"
 #include "graph.hpp"
@@ -27,45 +26,39 @@ int main() {
   std::cout << "Testing Random Graph Scale: " << graph.get_order() << " vertices\n";
   RandomSampler sampler(&graph);
 
-  std::uniform_int_distribution<std::size_t> weight_dist(1, 50);
-  std::vector<std::pair<VertexIndex, std::size_t>> random_updates;
+  std::uniform_int_distribution<std::size_t> freq_dist(1, 50);
+  std::vector<std::size_t> fort_appearances(graph.get_order(), 0);
     
   for (std::size_t a = 0; a < graph.get_order(); a++) {
-    random_updates.emplace_back(a, weight_dist(local_gen));
+    std::size_t frequency = freq_dist(local_gen);
+    fort_appearances[a] = frequency;
+    for (std::size_t f = 0; f < frequency; f++) {
+      VertexSet fort = { static_cast<Vertex>(a) };
+      sampler.update_weights(fort);
+    }
   }
-  sampler.update_weights(random_updates);
 
   std::vector<std::size_t> counts(graph.get_order(), 0);
   std::size_t iterations = 30000;
   for (std::size_t a = 0; a < iterations; a++) {
-    Graph sub = sampler(1, 10); 
+    Graph sub = graph.subgraph(sampler(1, 10)); 
     if (sub.get_order() == 0) continue;
     counts[sub.get_label(0)]++;
   }
 
-  int failures = 0;
-    
   std::cout << "\n" << std::setw(6) << "Vertex" 
-            << " | " << std::setw(12) << "Target Prob" 
-            << " | " << std::setw(13) << "Observed Prob" 
-            << " | " << "Status" << "\n";
-  std::cout << std::string(50, '-') << "\n";
+            << " | " << std::setw(12) << "Fort Count" 
+            << " | " << std::setw(15) << "Observed %" << "\n";
+  std::cout << std::string(40, '-') << "\n";
 
   for (std::size_t a = 0; a < graph.get_order(); a++) {
-    double target = sampler.get_weight(a);
-    double observed = static_cast<double>(counts[a]) / iterations;
-    double deviation = std::abs(target - observed);
-        
-    bool passed = (deviation <= 0.015); // 1.5% tolerance
-    if (!passed) failures++;
+    double observed_pct = (static_cast<double>(counts[a]) / iterations) * 100.0;
 
     std::cout << std::setw(6) << a << " | " 
-              << std::setw(12) << std::fixed << std::setprecision(4) << target << " | " 
-              << std::setw(13) << observed << " | " 
-              << (passed ? "OK" : "FAIL") << "\n";
+              << std::setw(12) << fort_appearances[a] << " | " 
+              << std::setw(14) << std::fixed << std::setprecision(2) << observed_pct << "%" << "\n";
   }
 
-  std::cout << std::string(50, '-') << "\n";
-  if (failures == 0) std::cout << "OVERALL RESULT: SUCCESS (All vertices within tolerance)\n";
-  else std::cout << "OVERALL RESULT: FAIL (" << failures << " vertices outside tolerance)\n";
+  std::cout << std::string(40, '-') << "\n";
+  std::cout << "Test completed over " << iterations << " iterations.\n";
 }

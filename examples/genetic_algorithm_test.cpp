@@ -2,6 +2,7 @@
 #include <cassert>
 
 #include "genetic_algorithm.hpp"
+#include "zero_forcing.hpp"
 #include "graph.hpp"
 
 void test_empty() {
@@ -12,7 +13,7 @@ void test_empty() {
   ZFGeneticSolver solver(&graph, 100);
   VertexSet result = solver.run(100);
 
-  assert(graph.is_valid_zf(result));
+  assert(is_valid_zero_forcing(graph, result));
   assert(result.size() == 0);
 
   std::cout << "Test Empty: Passed" << "\n";
@@ -26,7 +27,7 @@ void test_single() {
   ZFGeneticSolver solver(&graph, 100);
   VertexSet result = solver.run(100);
 
-  assert(graph.is_valid_zf(result));
+  assert(is_valid_zero_forcing(graph, result));
   assert(result.size() == 1);
 
   std::cout << "Test Single: Passed" << "\n";
@@ -40,7 +41,7 @@ void test_k2() {
   ZFGeneticSolver solver(&graph, 100);
   VertexSet result = solver.run(100);
 
-  assert(graph.is_valid_zf(result));
+  assert(is_valid_zero_forcing(graph, result));
   assert(result.size() == 1);
 
   std::cout << "Test K2: Passed" << "\n";
@@ -54,7 +55,7 @@ void test_p3() {
   ZFGeneticSolver solver(&graph, 100);
   VertexSet result = solver.run(100);
 
-  assert(graph.is_valid_zf(result));
+  assert(is_valid_zero_forcing(graph, result));
   assert(result.size() == 1);
 
   std::cout << "Test P3: Passed" << "\n";
@@ -68,7 +69,7 @@ void test_star5() {
   ZFGeneticSolver solver(&graph, 100);
   VertexSet result = solver.run(100);
 
-  assert(graph.is_valid_zf(result));
+  assert(is_valid_zero_forcing(graph, result));
   assert(result.size() == 3);
 
   std::cout << "Test Star5: Passed" << "\n";
@@ -82,7 +83,7 @@ void test_c4() {
   ZFGeneticSolver solver(&graph, 100);
   VertexSet result = solver.run(100);
 
-  assert(graph.is_valid_zf(result));
+  assert(is_valid_zero_forcing(graph, result));
   assert(result.size() == 2);
 
   std::cout << "Test Cycle 4: Passed" << "\n";

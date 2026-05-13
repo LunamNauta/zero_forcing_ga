@@ -5,22 +5,26 @@
 
 #include "graph.hpp"
 
+inline constexpr double RS_EPSILON = 0.01;
+
 class RandomSampler {
 private:
   const Graph *graph;
-  std::vector<double> weights;
-  double sum_weights;
+
+  std::vector<std::size_t> num_fort;
+  std::size_t fort_count;
+
   std::mt19937 gen;
 
 public:
   RandomSampler(const Graph *gi);
 
-  void update_weight(VertexIndex vert, std::size_t delta);
-  void update_weights(const std::vector<std::pair<VertexIndex, std::size_t>> &vert_deltas);
+  void update_weights(const VertexSet &fort);
 
-  double get_weight(VertexIndex vert) const;
+  double get_weight(Vertex vert) const;
+  double sum_weights() const;
 
-  Graph operator()(std::size_t num_samples, std::size_t max_attempts);
+  VertexSet operator()(std::size_t num_samples, std::size_t max_attempts, const VertexSet &ignore = {});
 };
 
 #endif
