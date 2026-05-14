@@ -68,5 +68,4 @@ int main() {
     std::cout << "Observed Z(G): " << result.size() << "\n";
     std::cout << "Delta: " << ((std::int64_t)expected - (std::int64_t)result.size()) << "\n\n";
   }
-
 }
