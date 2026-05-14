@@ -59,11 +59,11 @@ int main() {
   double submodel_type2_time = 0;
   double submodel_type3_time = 0;
   
-  const int num_tests = 5;
+  const int num_tests = 1;
 
   for (int a = 1; a <= num_tests; a++) {
     // Instead of loading from file, generate a ramndom, graph
-    std::string graph6 = generate_random_graph6(1, 20)[0];
+    std::string graph6 = generate_random_graph6(1, 50)[0];
     graph.from_graph6(graph6);
     
     std::cout << "\nTesting Graph: " << graph6 << "\n";

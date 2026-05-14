@@ -21,8 +21,8 @@ public:
 
   void update_weights(const VertexSet &fort);
 
-  double get_weight(Vertex vert) const;
-  double sum_weights() const;
+  double get_weight(Vertex u) const;
+  double sum_weights(const VertexSet &ignored) const;
 
   VertexSet operator()(std::size_t num_samples, std::size_t max_attempts, const VertexSet &ignore = {});
 };

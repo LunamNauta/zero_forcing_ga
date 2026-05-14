@@ -52,14 +52,14 @@ std::vector<std::string> generate_random_graph6(int num_graphs, int n) {
 }
 
 int main() {
-  std::vector<std::string> graph_strs = generate_random_graph6(100, 20);
+  std::vector<std::string> graph_strs = generate_random_graph6(100, 50);
   Graph graph;
 
   for (const std::string &graph6 : graph_strs) {
     graph.from_graph6(graph6);
 
     ZFGeneticSolver solver(&graph, 100);
-    VertexSet result = solver.run(200);
+    VertexSet result = solver.run(50);
 
     std::size_t expected = zero_forcing_wavefront(graph);
 

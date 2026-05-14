@@ -51,18 +51,20 @@ Individual ZFGeneticSolver::crossover_individual(const Individual &ind1, const I
     if (ind1.genes[a] || ind2.genes[a]) parent_union.push_back(a);
   }
 
-  VertexSet current_start = chromosome_to_set(offspring.genes);
-
-  VertexSet forced = zero_forcing_closure(*graph, current_start);
+  VertexSet initial = chromosome_to_set(offspring.genes);
+  VertexSet forced = zero_forcing_closure(*graph, initial);
     
   while (forced.size() < graph->get_order()) {
     VertexSet verts = sampler(1, 100, forced);
-    current_start.insert(*verts.begin());
+    initial.insert(*verts.begin());
     forced.insert(*verts.begin());
     forced = std::move(zero_forcing_closure(*graph, forced));
   }
 
-  offspring.size = current_start.size();
+  offspring.size = initial.size();
+  offspring.genes.clear();
+  offspring.genes.resize(graph->get_order(), false);
+  for (Vertex u : initial) offspring.genes[u] = 1;
   return offspring;
 }
 
@@ -89,8 +91,8 @@ void ZFGeneticSolver::crossover_population() {
   next_gen.reserve(pop_size);
 
   std::size_t elites = pop_size / 10;
-  for (std::size_t i = 0; i < elites; ++i) {
-    next_gen.push_back(population[i]);
+  for (std::size_t a = 0; a < elites; a++) {
+    next_gen.push_back(population[a]);
   }
 
   std::mt19937 gen(std::random_device{}());
