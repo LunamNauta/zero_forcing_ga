@@ -7,8 +7,11 @@
 #include <vector>
 #include <string>
 
+#include <boost/dynamic_bitset/dynamic_bitset.hpp>
+
 typedef std::size_t Vertex;
 typedef std::unordered_set<Vertex> VertexSet;
+typedef boost::dynamic_bitset<> VertexBitset;
 typedef std::pair<Vertex, Vertex> Edge;
 
 inline constexpr Vertex INVALID_VERTEX = std::numeric_limits<Vertex>::max();

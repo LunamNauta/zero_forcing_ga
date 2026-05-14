@@ -1,136 +1,163 @@
 #include "genetic_algorithm.hpp"
 
-#include <algorithm>
 #include <random>
 
 #include "random_sampler.hpp"
 #include "zero_forcing.hpp"
 #include "graph.hpp"
 
-ZFGeneticSolver::ZFGeneticSolver(const Graph *gi, std::size_t population_size) :
+GeneticSolver::GeneticSolver(const Graph *gi, std::size_t population_size) :
   graph(gi),
   population(population_size),
-  sampler(gi)
+  sampler(gi),
+  gen(std::random_device{}())
 {
   initialize_population();
 }
 
-void ZFGeneticSolver::initialize_population() {
-  std::mt19937 gen(std::random_device{}());
-  std::bernoulli_distribution dist(0.15);
+void GeneticSolver::initialize_population() {
+  std::bernoulli_distribution dist(0.85);
 
-  for (auto &ind : population) {
-    ind.genes.assign(graph->get_order(), false);
-    for (std::size_t a = 0; a < graph->get_order(); a++) {
-      ind.genes[a] = dist(gen);
+  for (Individual &ind : population) {
+    ind.genes.resize(graph->get_order(), false);
+    for (Vertex u = 0; u < graph->get_order(); u++) {
+      if (!dist(gen)) continue;
+      ind.genes[u] = true;
     }
   }
 }
 
-void ZFGeneticSolver::score_population() {
-  for (auto &ind : population) {
-    VertexSet start_nodes = chromosome_to_set(ind.genes);
-    ind.size = start_nodes.size();
+void GeneticSolver::score_population() {
+  double penalty_weight = 1.0;
 
-    VertexSet forced_nodes = zero_forcing_closure(*graph, start_nodes);
-    std::size_t forced_count = forced_nodes.size();
+  for (Individual &ind : population) {
+    VertexBitset forced(ind.genes);
+    zero_forcing_closure(*graph, forced);
 
-    if (forced_count == graph->get_order()) ind.fitness = 1000.0 + (double)(graph->get_order() - ind.size);
-    else ind.fitness = (double)forced_count / graph->get_order();
+    double base_score = graph->get_order() - ind.genes.count(); 
+    double unforced_count = graph->get_order() - forced.count();
+    double penalty = penalty_weight * unforced_count;
+    
+    ind.score = 1000.0 + base_score - penalty;
   }
 }
 
-Individual ZFGeneticSolver::crossover_individual(const Individual &ind1, const Individual &ind2) {
-  Individual offspring;
-  offspring.genes.assign(graph->get_order(), false);
-    
-  std::vector<Vertex> parent_union;
-
-  for (std::size_t a = 0; a < graph->get_order(); a++) {
-    if (ind1.genes[a] && ind2.genes[a]) offspring.genes[a] = true;
-    if (ind1.genes[a] || ind2.genes[a]) parent_union.push_back(a);
-  }
-
-  VertexSet initial = chromosome_to_set(offspring.genes);
-  VertexSet forced = zero_forcing_closure(*graph, initial);
-    
-  while (forced.size() < graph->get_order()) {
-    VertexSet verts = sampler(1, 100, forced);
-    initial.insert(*verts.begin());
-    forced.insert(*verts.begin());
-    forced = std::move(zero_forcing_closure(*graph, forced));
-  }
-
-  offspring.size = initial.size();
-  offspring.genes.clear();
-  offspring.genes.resize(graph->get_order(), false);
-  for (Vertex u : initial) offspring.genes[u] = 1;
-  return offspring;
-}
-
-void ZFGeneticSolver::mutate_individual(Individual &ind) {
-  std::mt19937 gen(std::random_device{}());
-  std::uniform_real_distribution<double> dist(0.0, 1.0);
-    
-  double prob = 1.0 / graph->get_order();
-
-  for (std::size_t a = 0; a < ind.genes.size(); a++) {
-    if (dist(gen) >= prob) continue;
-    ind.genes[a] = !ind.genes[a];
-  }
-}
-
-void ZFGeneticSolver::crossover_population() {
+void GeneticSolver::crossover_population() {
   std::sort(population.begin(), population.end(), [](const Individual &a, const Individual &b) {
-    return a.fitness > b.fitness;
+    return a.score > b.score;
   });
 
-  std::size_t pop_size = population.size();
-  std::size_t half = pop_size / 2;
-  std::vector<Individual> next_gen;
-  next_gen.reserve(pop_size);
+  std::vector<Individual> next_generation;
+  next_generation.reserve(population.size());
 
-  std::size_t elites = pop_size / 10;
+  std::size_t elites = population.size() * GA_ELITE_PCT;
   for (std::size_t a = 0; a < elites; a++) {
-    next_gen.push_back(population[a]);
+    next_generation.push_back(population[a]);
   }
 
-  std::mt19937 gen(std::random_device{}());
-  std::uniform_int_distribution<std::size_t> parent_dist(0, half);
-
-  while (next_gen.size() < pop_size) {
-    next_gen.push_back(crossover_individual(population[parent_dist(gen)], population[parent_dist(gen)]));
+  while (next_generation.size() < population.size()) {
+    Individual &parent1 = select_parent();
+    Individual &parent2 = select_parent();
+    next_generation.push_back(crossover_individual(parent1, parent2));
   }
 
-  population = std::move(next_gen);
+  population = std::move(next_generation);
 }
 
-void ZFGeneticSolver::mutate_population() {
-  std::size_t elites = population.size() / 10;
+void GeneticSolver::mutate_population() {
+  std::size_t elites = population.size() * GA_ELITE_PCT;
   for (std::size_t a = elites; a < population.size(); a++) {
     mutate_individual(population[a]);
   }
 }
 
-VertexSet ZFGeneticSolver::chromosome_to_set(const Chromosome& genes) {
-  VertexSet v_set;
-  for (std::size_t a = 0; a < genes.size(); a++) {
-    if (genes[a]) v_set.insert(a);
+void GeneticSolver::fix_population() {
+  std::size_t elites = population.size() * GA_ELITE_PCT;
+  for (std::size_t a = elites; a < population.size(); a++) {
+    fix_individual(population[a]);
   }
-  return v_set;
 }
 
-VertexSet ZFGeneticSolver::run(std::size_t generations) {
-  for (std::size_t a = 0; a < generations; a++) {
+Individual& GeneticSolver::select_parent() {
+  std::uniform_int_distribution<std::size_t> dist(0, population.size() - 1);
+  const std::size_t tournament_size = 3;
+
+  Individual &best = population[dist(gen)];
+  for (std::size_t a = 1; a < tournament_size; a++) {
+    Individual &candidate = population[dist(gen)];
+    if (candidate.score <= best.score) continue;
+    best = candidate;
+  }
+
+  return best;
+}
+
+Individual GeneticSolver::crossover_individual(const Individual &parent1, const Individual &parent2) {
+  Individual offspring;
+  offspring.genes = parent1.genes & parent2.genes;
+  return offspring;
+}
+
+void GeneticSolver::mutate_individual(Individual &ind) {
+  std::uniform_real_distribution<double> dist(0.0, 1.0);
+  double prob = 1.0 / graph->get_order();
+
+  for (Vertex u = 0; u < graph->get_order(); u++) {
+    if (dist(gen) >= prob) continue;
+    ind.genes[u] = !ind.genes[u];
+  }
+}
+
+void GeneticSolver::fix_individual(Individual &ind) {
+  VertexBitset ignored(ind.genes);
+  VertexBitset forced(ind.genes);
+  zero_forcing_closure(*graph, forced);
+  
+  while (forced.count() < graph->get_order()) {
+    VertexBitset fort = ~forced;
+    sampler.update_weights(fort);
+
+    VertexBitset verts = sampler.sample_bitset((graph->get_order() - forced.count()) * 0.1 + 1, 100, ignored);
+    ind.genes |= verts;
+    ignored |= verts;
+    forced |= verts;
+    zero_forcing_closure(*graph, forced);
+  }
+}
+
+VertexBitset GeneticSolver::chromosome_to_bitset(const Chromosome &genes) {
+  return genes;
+}
+
+VertexSet GeneticSolver::chromosome_to_set(const Chromosome &genes) {
+  VertexSet output;
+  for (Vertex u = 0; u < genes.size(); u++) {
+    if (!genes[u]) continue;
+    output.insert(u);
+  }
+  return output;
+}
+
+Individual GeneticSolver::run(std::size_t num_generations) {
+  for (std::size_t a = 0; a < num_generations; a++) {
     score_population();
     crossover_population();
     mutate_population();
+    fix_population();
   }
 
   score_population();
   auto best = std::max_element(population.begin(), population.end(), [](const Individual &a, const Individual &b) {
-    return a.fitness < b.fitness;
+    return a.score < b.score;
   });
 
-  return chromosome_to_set(best->genes);
+  return *best;
+}
+
+VertexBitset GeneticSolver::run_bitset(std::size_t num_generations) {
+  return run(num_generations).genes;
+}
+
+VertexSet GeneticSolver::run_set(std::size_t num_generations) {
+  return chromosome_to_set(run(num_generations).genes);
 }

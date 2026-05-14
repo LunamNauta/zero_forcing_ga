@@ -1,38 +1,81 @@
 #include "zero_forcing.hpp"
+#include "graph.hpp"
 
+#include <limits>
 #include <list>
 
-bool is_valid_zero_forcing(const Graph &graph, const VertexSet &filled) {
-  return zero_forcing_closure(graph, filled).size() == graph.get_order();
-}
+std::size_t zero_forcing_closure(const Graph &graph, VertexBitset &filled) {
+  std::vector<std::size_t> white_degree(graph.get_order());
+  std::vector<Vertex> newly_filled;
+  std::vector<Vertex> active;
+  std::vector<Vertex> next;
+  std::size_t pt = 0;
 
-VertexSet zero_forcing_closure(const Graph &graph, VertexSet filled, std::size_t *pt) {
-  std::size_t propagation_time;
-	Vertex vert;
-
-	for (propagation_time = 0; propagation_time < graph.get_order(); propagation_time++) {
-		VertexSet active;
-
-		for (Vertex u : filled) {
-			std::size_t count = 0;
-			for (Vertex v : graph.get_adjacent(u)) {
-				if (filled.find(v) != filled.cend()) continue;
-				count++;
-				vert = v;
-			}
-			if (count == 1) active.insert(vert);
-		}
-		if (active.empty()) break;
-
-		filled.insert(active.cbegin(), active.cend());
-	}
-
-  if (pt) {
-	  if (filled.size() == graph.get_order()) *pt = propagation_time;
-	  else *pt = std::numeric_limits<std::size_t>::max();
+  for (Vertex u = 0; u < graph.get_order(); ++u) {
+    for (Vertex v : graph.get_adjacent(u)) {
+      if (!filled[v]) white_degree[u]++;
+    }
+    if (filled[u] && white_degree[u] == 1) active.push_back(u);
   }
 
-  return filled;
+  while (!active.empty()) {
+    newly_filled.clear();
+    next.clear();
+
+    for (Vertex u : active) {
+      if (white_degree[u] != 1) continue;
+
+      for (Vertex v : graph.get_adjacent(u)) {
+        if (filled[v]) continue;
+        filled.set(v);
+        newly_filled.push_back(v);
+        break; 
+      }
+    }
+
+    if (newly_filled.empty()) break;
+
+    for (Vertex v : newly_filled) {
+      for (Vertex neighbor : graph.get_adjacent(v)) {
+        white_degree[neighbor]--;
+        if (filled[neighbor] && white_degree[neighbor] == 1) next.push_back(neighbor);
+      }
+      if (white_degree[v] == 1) next.push_back(v);
+    }
+
+    active = std::move(next);
+    pt++;
+  }
+
+  if (filled.count() != graph.get_order()) return std::numeric_limits<std::size_t>::max();
+  return pt;
+}
+
+std::size_t zero_forcing_closure(const Graph &graph, VertexSet &filled) {
+  VertexSet next;
+  std::size_t pt;
+
+  for (pt = 0; pt < graph.get_order(); pt++){
+    next.clear();
+
+    for (Vertex u : filled) {
+      std::size_t white_count = 0;
+      Vertex forced_vertex;
+
+      for (Vertex v : graph.get_adjacent(u)) {
+        if (filled.find(v) != filled.end()) continue;
+        if (++white_count > 1) break;
+        forced_vertex = v;
+      }
+      if (white_count == 1) next.insert(forced_vertex);
+    }
+    if (next.empty()) break;
+    
+    filled.insert(next.begin(), next.end());
+  }
+
+  if (filled.size() != graph.get_order()) return std::numeric_limits<std::size_t>::max();
+  return pt;
 }
 
 std::size_t zero_forcing_wavefront(const Graph &graph) {
@@ -54,7 +97,7 @@ std::size_t zero_forcing_wavefront(const Graph &graph) {
 				VertexSet neighbors = graph.get_adjacent(v);
 				S_new.insert(neighbors.cbegin(), neighbors.cend());
 
-				S_new = std::move(zero_forcing_closure(graph,S_new));
+				zero_forcing_closure(graph,S_new);
 
 				std::size_t r_new = r;
 				if (S.find(v) == S.cend()) r_new++;
@@ -89,5 +132,4 @@ std::size_t zero_forcing_wavefront(const Graph &graph) {
 	}
 
 	return graph.get_order();
-;
 }

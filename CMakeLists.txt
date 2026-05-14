@@ -23,7 +23,7 @@ message(STATUS "Gurobi Directory: ${GUROBI_DIR}")
 message(STATUS "Gurobi Include:   ${GUROBI_INC}")
 message(STATUS "Gurobi Lib Dir:   ${GUROBI_LIB_DIR}")
 
-add_compile_options(-O3 -march=native -mtune=native -g)
+add_compile_options(-O3 -march=native -mtune=native -lto)
 
 include_directories(include)
 include_directories(${GUROBI_INC})

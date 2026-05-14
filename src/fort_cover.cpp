@@ -37,7 +37,7 @@ void violated_fort_testing_v1::callback() {
       filled.insert(u);
     }
 
-    filled = std::move(zero_forcing_closure(*graph, filled));
+    zero_forcing_closure(*graph, filled);
 
     GRBLinExpr expr = 0;
     for (Vertex u : filled) {
@@ -147,8 +147,7 @@ void violated_fort_testing_v3::callback() {
       filled.insert(u);
     }
 
-    std::size_t pt;
-    filled = std::move(zero_forcing_closure(*graph, filled, &pt));
+    std::size_t pt = zero_forcing_closure(*graph, filled);
 
     // If filled is not entire vertex set, add fort constraint to main model
     if (pt == std::numeric_limits<std::size_t>::max()) {

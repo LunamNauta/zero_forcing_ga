@@ -41,7 +41,7 @@ int main() {
   std::vector<std::size_t> counts(graph.get_order(), 0);
   std::size_t iterations = 30000;
   for (std::size_t a = 0; a < iterations; a++) {
-    Graph sub = graph.subgraph(sampler(1, 10)); 
+    Graph sub = graph.subgraph(sampler.sample_set(1, 10)); 
     if (sub.get_order() == 0) continue;
     counts[sub.get_label(0)]++;
   }
