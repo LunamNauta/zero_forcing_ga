@@ -298,7 +298,7 @@ VertexBitset GeneticSolver::extract_smaller_fort(VertexBitset fort) {
     for (Vertex v : graph->get_adjacent(u)) fort_degree[v]++;
   }
   
-  // Shuffle so we discover a random minimal sub-fort each time
+  // Shuffle so we discover a random smaller sub-fort each time
   std::shuffle(candidates.begin(), candidates.end(), gen);
   
   // Attempt to remove each vertex from the fort
