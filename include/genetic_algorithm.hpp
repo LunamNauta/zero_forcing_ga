@@ -6,7 +6,7 @@
 #include "random_sampler.hpp"
 #include "graph.hpp"
 
-/**  @brief Alias for the genetic representation of a solution. */
+/** @brief Alias for the genetic representation of a solution. */
 typedef VertexBitset Chromosome;
 
 /** @brief The percentage of the population preserved as "elites" during crossover. */

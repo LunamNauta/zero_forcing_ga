@@ -43,25 +43,33 @@ void RandomSampler::update_weights(const VertexSet &fort) {
   nf++;
 }
 
-VertexBitset RandomSampler::sample_bitset(std::size_t num_samples, std::size_t max_attempts, const VertexBitset &ignored) {
+VertexBitset RandomSampler::sample_bitset(std::size_t num_samples, const VertexBitset &ignored) {
+  // Default conditions for empty samples or graph
   if (num_samples == 0 || graph->get_order() == 0) return {};
+  // Bound number of samples
   num_samples = std::min(num_samples, graph->get_order());
 
+  // Distribution for base of selection weight
   std::uniform_real_distribution<double> dist(0.0, 1.0);
+
+  // Buffer for potential sample vertices (and their weight)
   std::vector<std::pair<Vertex, double>> candidates;  
   double total_weight = sum_weights(ignored);
 
   for (Vertex u = 0; u < graph->get_order(); u++) {
     if (ignored[u]) continue;
+    // Vertex weight is rand^(1/(weight / total_weight))
     double base = dist(gen);
     double weight = get_weight(u);
     candidates.emplace_back(u, std::pow(base, 1.0 / (weight / total_weight)));
   }
 
+  // Sort the potential samples based on their weight
   std::sort(candidates.begin(), candidates.end(), [](const auto &a, const auto &b){
     return a.second > b.second;
   });
 
+  // Select the top @num_samples candidates for the sample
   VertexBitset sample(graph->get_order(), false);
   for (std::size_t a = 0; a < std::min(candidates.size(), num_samples); a++) {
     sample[candidates[a].first] = true;
@@ -69,25 +77,34 @@ VertexBitset RandomSampler::sample_bitset(std::size_t num_samples, std::size_t m
   return sample;
 }
 
-VertexSet RandomSampler::sample_set(std::size_t num_samples, std::size_t max_attempts, const VertexSet &ignored) {
+VertexSet RandomSampler::sample_set(std::size_t num_samples, const VertexSet &ignored) {
+  // Default conditions for empty samples or graph
   if (num_samples == 0 || graph->get_order() == 0) return {};
+
+  // Bound number of samples
   num_samples = std::min(num_samples, graph->get_order());
 
+  // Distribution for base of selection weight
   std::uniform_real_distribution<double> dist(0.0, 1.0);
+
+  // Buffer for potential sample vertices (and their weight)
   std::vector<std::pair<Vertex, double>> candidates;  
   double total_weight = sum_weights(ignored);
 
   for (Vertex u = 0; u < graph->get_order(); u++) {
     if (ignored.find(u) != ignored.cend()) continue;
+    // Vertex weight is rand^(1/(weight / total_weight))
     double base = dist(gen);
     double weight = get_weight(u);
     candidates.emplace_back(u, std::pow(base, 1.0 / (weight / total_weight)));
   }
 
+  // Sort the potential samples based on their weight
   std::sort(candidates.begin(), candidates.end(), [](const auto &a, const auto &b){
     return a.second > b.second;
   });
 
+  // Select the top @num_samples candidates for the sample
   VertexSet sample;
   for (std::size_t a = 0; a < std::min(candidates.size(), num_samples); a++) {
     sample.insert(candidates[a].first);

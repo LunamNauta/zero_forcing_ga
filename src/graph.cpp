@@ -288,6 +288,10 @@ std::size_t Graph::get_vertex_count() const {
   return vert_count;
 }
 
+std::size_t Graph::get_size() const {
+  return edge_count;
+}
+
 std::size_t Graph::get_edge_count() const {
   return edge_count;
 }
@@ -311,6 +315,11 @@ std::size_t Graph::get_max_degree() const {
 Vertex Graph::get_label(Vertex u) const {
   assert(u < vert_count);
   return labels[u];
+}
+
+VertexSet Graph::get_neighbors(Vertex u) const {
+  assert(u < vert_count);
+  return adj[u];
 }
 
 VertexSet Graph::get_adjacent(Vertex u) const {

@@ -251,7 +251,7 @@ void GeneticSolver::fix_individual(Individual &ind) {
     // Add 1 vertex from each of the known forts that wasn't covered
     for (std::unordered_set<VertexBitset>::const_iterator it_fort = minimal_forts.cbegin(); it_fort != minimal_forts.cend(); it_fort++) {
       if ((*it_fort & forced).any()) continue; // Ignore this fort if we've already covered it
-      VertexBitset verts = sampler.sample_bitset(1, 100, ~*it_fort);
+      VertexBitset verts = sampler.sample_bitset(1, ~*it_fort);
       ind.genes |= verts;
       forced |= verts;
     }
