@@ -79,7 +79,7 @@ public:
    * @param ignored Vertices that should never be selected during this sampling.
    * @return A VertexBitset populated with sampled vertices.
    */
-  VertexBitset sample_bitset(std::size_t num_samples, const VertexBitset &ignored = {});
+  VertexBitset sample_bitset(std::size_t num_samples, VertexBitset ignored = {});
 };
 
 #endif

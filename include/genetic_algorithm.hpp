@@ -88,6 +88,8 @@ private:
   */
   Individual& select_parent();
 
+  void score_individual(Individual &ind);
+
   /**
    * @brief Combines two parents to produce a new offspring.
    * 

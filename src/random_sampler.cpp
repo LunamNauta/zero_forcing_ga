@@ -43,11 +43,12 @@ void RandomSampler::update_weights(const VertexSet &fort) {
   nf++;
 }
 
-VertexBitset RandomSampler::sample_bitset(std::size_t num_samples, const VertexBitset &ignored) {
+VertexBitset RandomSampler::sample_bitset(std::size_t num_samples, VertexBitset ignored) {
   // Default conditions for empty samples or graph
   if (num_samples == 0 || graph->get_order() == 0) return {};
   // Bound number of samples
   num_samples = std::min(num_samples, graph->get_order());
+  ignored.resize(graph->get_order());
 
   // Distribution for base of selection weight
   std::uniform_real_distribution<double> dist(0.0, 1.0);

@@ -32,10 +32,10 @@ int main(int argc, char* argv[]) {
   population_size = std::stoull(argv[2]);
   generations_before_quit = std::stoull(argv[3]);
   order = std::stoull(argv[4]);
-  generations_before_quit *= std::sqrt(order);
+  // generations_before_quit *= std::sqrt(order);
 
-  std::vector<Graph> graphs = Graph::generate_random(order, num_graphs, 0.4);
-  // graphs.push_back(Graph::generate_path(order));
+  std::vector<Graph> graphs; // = Graph::generate_random(order, num_graphs, 0.5);
+  graphs.push_back(Graph::generate_path(order));
 
   double total_error = 0;
   double num_failed = 0;
@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
  
     generation = 0;
     while (true) {
-      result = std::move(solver.run_set(std::sqrt(graph.get_order())));
+      result = std::move(solver.run_set(1)); //std::sqrt(graph.get_order())));
       generation++;
       if (result.size() < best) {
         best = result.size();
@@ -86,7 +86,7 @@ int main(int argc, char* argv[]) {
 
     if (result.size() != expected) std::cout << "Attempting to reach expected answer" << "\n";
     while (result.size() != expected) {
-      result = std::move(solver.run_set(std::sqrt(graph.get_order())));
+      result = std::move(solver.run_set(1)); //std::sqrt(graph.get_order())));
       generation++;
       if (result.size() < best) {
         best = result.size();
