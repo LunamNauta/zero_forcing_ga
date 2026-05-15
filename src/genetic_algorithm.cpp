@@ -276,7 +276,7 @@ VertexSet GeneticSolver::chromosome_to_set(const Chromosome &genes) {
 
 void GeneticSolver::acknowledge_fort(const VertexBitset &fort) {
   // Add the fort to the list of known forts
-  // Extract a minimal fort from it first
+  // Extract a smaller fort from it first
   VertexBitset minimal_fort = extract_smaller_fort(fort);
   if (minimal_fort.any()) {
     sampler.update_weights(minimal_fort);
