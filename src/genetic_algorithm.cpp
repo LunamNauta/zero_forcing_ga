@@ -249,7 +249,7 @@ void GeneticSolver::fix_individual(Individual &ind) {
     if (found_clog) continue;
 
     // Add 1 vertex from each of the known forts that wasn't covered
-    for (std::unordered_set<VertexBitset>::const_iterator it_fort = minimal_forts.cbegin(); it_fort != minimal_forts.cend(); it_fort++) {
+    for (std::unordered_set<VertexBitset>::const_iterator it_fort = known_forts.cbegin(); it_fort != known_forts.cend(); it_fort++) {
       if ((*it_fort & forced).any()) continue; // Ignore this fort if we've already covered it
       VertexBitset verts = sampler.sample_bitset(1, ~*it_fort);
       ind.genes |= verts;
@@ -277,10 +277,10 @@ VertexSet GeneticSolver::chromosome_to_set(const Chromosome &genes) {
 void GeneticSolver::acknowledge_fort(const VertexBitset &fort) {
   // Add the fort to the list of known forts
   // Extract a smaller fort from it first
-  VertexBitset minimal_fort = extract_smaller_fort(fort);
-  if (minimal_fort.any()) {
-    sampler.update_weights(minimal_fort);
-    minimal_forts.insert(minimal_fort);
+  VertexBitset smaller_fort = extract_smaller_fort(fort);
+  if (smaller_fort.any()) {
+    sampler.update_weights(smaller_fort);
+    known_forts.insert(smaller_fort);
   } 
 }
 

@@ -35,7 +35,7 @@ private:
   std::size_t best_score;                         //!< The lowest Z(G) in the current run.
   std::size_t since_best;                         //!< Counter for generations elapsed since the last improvement in best_score.
   double mutation_rate;                           //!< The probability (0.0 to 1.0) of a mutation occurring during crossover.
-  std::unordered_set<VertexBitset> minimal_forts; //!< A collection of unique, small forts discovered across all generations.
+  std::unordered_set<VertexBitset> known_forts;   //!< A collection of unique, small forts discovered across all generations.
 
   /**
   * @brief Executes the genetic evolution loop.
@@ -117,7 +117,7 @@ private:
   * @brief Processes and stores a new fort.
   * 
   * The fort is reduced to a smaller form via 'extract_smaller_fort'.
-  * before being stored in 'minimal_forts'.
+  * before being stored in 'known_forts'.
   * @param fort The newly discovered fort.
   */
   void acknowledge_fort(const VertexBitset &fort);
