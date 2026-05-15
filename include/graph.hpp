@@ -78,6 +78,17 @@ public:
    */
   Graph subgraph(const std::unordered_set<Vertex> &vertices) const;
 
+  // Generation ----------------------------------------------------------------
+  /** @name Generation
+  *  Methods for generating common types of graphs
+  *  @{ */
+  static std::vector<Graph> generate_random(std::size_t ord, std::size_t count, double edge_prob);
+  static Graph generate_path(std::size_t ord);
+  static Graph generate_cycle(std::size_t ord);
+  static Graph generate_complete(std::size_t ord);
+  static Graph generate_cubic(std::size_t ord);
+  /** @} */
+
   // Element Access ----------------------------------------------------------------
   /** @brief Returns the number of vertices (Order). */
   std::size_t get_order() const;

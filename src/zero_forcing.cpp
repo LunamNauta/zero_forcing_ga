@@ -78,7 +78,62 @@ std::size_t zero_forcing_closure(const Graph &graph, VertexSet &filled) {
   return pt;
 }
 
-std::size_t zero_forcing_wavefront(const Graph &graph) {
+std::size_t zero_forcing_wavefront(const Graph &graph, std::size_t upper_bound) {
+  if (graph.get_order() == 0) return 0;
+  upper_bound = std::min(graph.get_order(), std::numeric_limits<std::size_t>::max());
+
+  std::list<std::pair<VertexSet, std::size_t>> cl_pairs;
+  cl_pairs.emplace_back(VertexSet{}, 0);
+
+  for (std::size_t R = 1; R <= graph.get_order(); R++) {
+    // Use a temporary list to store new pairs for this iteration to avoid iterator invalidation and unnecessary re-processing
+    std::list<std::pair<VertexSet, std::size_t>> next_cl_pairs;
+
+    for (auto j = cl_pairs.cbegin(); j != cl_pairs.cend(); j++) {
+      const VertexSet &S = j->first;
+      std::size_t r = j->second;
+
+      for (Vertex v = 0; v < graph.get_order(); v++) {
+        // Calculate the new r first to prune early
+        std::size_t r_new = r;
+        if (S.find(v) == S.cend()) r_new++;
+
+        VertexSet neighbors = graph.get_adjacent(v);
+        std::size_t neighbors_outside_S = 0;
+        for (auto it = neighbors.cbegin(); it != neighbors.cend(); it++) {
+          if (S.find(*it) == S.cend()) neighbors_outside_S++;
+        }
+        if (neighbors_outside_S > 1) r_new += (neighbors_outside_S - 1);
+
+        // Prune paths that we know aren't feasible
+        if (r_new >= upper_bound || r_new > R) continue;
+
+        VertexSet S_new = S; 
+        S_new.insert(v);
+        S_new.insert(neighbors.cbegin(), neighbors.cend());
+
+        zero_forcing_closure(graph, S_new);
+
+        if (S_new.size() == graph.get_order()) return r_new;
+
+        bool already_present = false;
+        for (auto it = cl_pairs.cbegin(); it != cl_pairs.cend(); it++) {
+          if (it->first != S_new || it->second > r_new) continue;
+          already_present = true;
+          break;
+        }
+        if (!already_present) next_cl_pairs.push_back({S_new, r_new});
+      }
+
+      cl_pairs.splice(cl_pairs.end(), next_cl_pairs);
+    }
+  }
+
+  return upper_bound;
+}
+
+/*
+std::size_t zero_forcing_wavefront(const Graph &graph, std::size_t upper_bound) {
   if (graph.get_order() == 0) return 0;
 
 	std::list<std::pair<VertexSet, std::size_t>> cl_pairs;
@@ -133,3 +188,4 @@ std::size_t zero_forcing_wavefront(const Graph &graph) {
 
 	return graph.get_order();
 }
+*/

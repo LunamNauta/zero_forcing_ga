@@ -7,6 +7,7 @@
 #include <numeric>
 #include <cassert>
 #include <sstream>
+#include <random>
 #include <queue>
 
 std::string _file_to_string(const std::ifstream &file) {
@@ -277,6 +278,88 @@ Graph Graph::subgraph(const VertexSet &vertices) const {
   }
 
   return induced;
+}
+
+// Generation ----------------------------------------------------------------
+std::vector<Graph> Graph::generate_random(std::size_t ord, std::size_t count, double edge_prob) {
+  std::vector<Graph> output;
+  output.reserve(count);
+    
+  std::mt19937 gen(std::random_device{}());
+  std::bernoulli_distribution dist(edge_prob);
+
+  for (std::size_t a = 0; a < count; a++) {
+    Graph graph(ord);
+    for (Vertex u = 0; u < ord; u++) {
+      for (Vertex v = u + 1; v < ord; v++) {
+        if (dist(gen)) graph.insert_edge(u, v);
+      }
+    }
+    output.push_back(std::move(graph));
+  }
+
+  return output;
+}
+
+Graph Graph::generate_path(std::size_t ord) {
+  Graph graph(ord);
+  if (ord < 2) return graph;
+  for (Vertex u = 0; u < ord - 1; u++) {
+    graph.insert_edge(u, u + 1);
+  }
+  return graph;
+}
+
+Graph Graph::generate_cycle(std::size_t ord) {
+  if (ord < 3) return Graph(0);
+  Graph graph = generate_path(ord);
+  graph.insert_edge(ord - 1, 0);
+  return graph;
+}
+
+Graph Graph::generate_complete(std::size_t ord) {
+  Graph graph(ord);
+  for (Vertex u = 0; u < ord; u++) {
+    for (Vertex v = u + 1; v < ord; v++) {
+      graph.insert_edge(u, v);
+    }
+  }
+  return graph;
+}
+
+Graph Graph::generate_cubic(std::size_t ord) {
+  if (ord % 2 != 0 || ord < 4) return Graph(0);
+
+  std::mt19937 gen(std::random_device{}());
+
+  while (true) {
+    Graph graph(ord);
+    std::vector<std::size_t> points;
+    points.reserve(ord * 3);
+    for (std::size_t a = 0; a < ord; a++) {
+      points.push_back(a);
+      points.push_back(a);
+      points.push_back(a);
+    }
+
+    std::shuffle(points.begin(), points.end(), gen);
+
+    bool valid = true;
+    for (std::size_t a = 0; a < points.size(); a += 2) {
+      Vertex u = points[a];
+      Vertex v = points[a + 1];
+
+      VertexSet neighbors(u);
+      if (u == v || neighbors.find(v) != neighbors.cend()) { 
+        valid = false;
+        break;
+      }
+
+      graph.insert_edge(u, v);
+    }
+
+    if (valid) return graph;
+  }
 }
 
 // Element Access ----------------------------------------------------------------

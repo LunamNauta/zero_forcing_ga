@@ -56,6 +56,7 @@ VertexBitset RandomSampler::sample_bitset(std::size_t num_samples, const VertexB
   std::vector<std::pair<Vertex, double>> candidates;  
   double total_weight = sum_weights(ignored);
 
+  // Compute weights
   for (Vertex u = 0; u < graph->get_order(); u++) {
     if (ignored[u]) continue;
     // Vertex weight is rand^(1/(weight / total_weight))

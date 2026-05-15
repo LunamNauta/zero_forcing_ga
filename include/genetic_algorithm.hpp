@@ -9,8 +9,11 @@
 /** @brief Alias for the genetic representation of a solution. */
 typedef VertexBitset Chromosome;
 
-/** @brief The percentage of the population preserved as "elites" during crossover. */
-inline constexpr double GA_ELITE_PCT = 0.15;
+/** @brief The (maximum) percentage chance of a vertex being added/removed during mutation. */
+inline constexpr double GA_MUTATION_PCT = 0.5;
+
+/** @brief The (maximum) percentage of the population preserved as "elites" during crossover and mutation. */
+inline constexpr double GA_ELITE_PCT = 0.33;
 
 /** @brief Represents a single solution in the genetic population. */
 struct Individual {
@@ -35,6 +38,7 @@ private:
   std::size_t best_score;                         //!< The lowest Z(G) in the current run.
   std::size_t since_best;                         //!< Counter for generations elapsed since the last improvement in best_score.
   double mutation_rate;                           //!< The probability (0.0 to 1.0) of a mutation occurring during crossover.
+  double elite_pct;                               //!< The percent of the population that are elites (excluded from operations such as mutation)
   std::unordered_set<VertexBitset> known_forts;   //!< A collection of unique, small forts discovered across all generations.
 
   /**

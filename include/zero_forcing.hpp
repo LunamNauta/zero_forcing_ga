@@ -25,6 +25,6 @@ std::size_t zero_forcing_closure(const Graph &graph, VertexBitset &filled);
  * @param graph The graph to analyze.
  * @return The order of smallest found zero forcing set on @p graph
  */
-std::size_t zero_forcing_wavefront(const Graph &graph);
+std::size_t zero_forcing_wavefront(const Graph &graph, std::size_t upper_bound = std::numeric_limits<std::size_t>::max());
 
 #endif
