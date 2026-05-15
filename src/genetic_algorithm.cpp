@@ -354,6 +354,10 @@ Individual GeneticSolver::run(std::size_t num_generations) {
   // Re-score the population. The last step may have found better solutions
   score_population();
 
+  // Ensure that the most optimal specimen is always a valid zero forcing set
+  // If this individual happened to be an elite before fix_population was called, it could theoretically be invalid
+  if (!population[0].forces) fix_individual(population[0]);
+
   // Return the most optimal specimen
   return population[0];
 }
