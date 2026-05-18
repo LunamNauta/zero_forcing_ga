@@ -35,11 +35,13 @@ private:
   std::vector<Individual> population;             //!< The current generation of candidate solutions.
   RandomSampler sampler;                          //!< Utility for weighted random selection of vertices.
   std::mt19937 gen;                               //!< The Mersenne Twister engine used for all stochastic operations.
-  std::size_t best_score;                         //!< The lowest Z(G) in the current run.
-  std::size_t since_best;                         //!< Counter for generations elapsed since the last improvement in best_score.
   double mutation_rate;                           //!< The probability (0.0 to 1.0) of a mutation occurring during crossover.
-  double elite_pct;                               //!< The percent of the population that are elites (excluded from operations such as mutation)
+  double elite_pct;                               //!< The percent of the population that are elites (excluded from operations such as mutation).
   std::unordered_set<VertexBitset> known_forts;   //!< A collection of unique, small forts discovered across all generations.
+  std::size_t since_better_score;                 //!< The number of generations since best_score changed.
+  std::size_t since_better_z;                     //!< The number of generations since best_z changed.
+  double best_score;                              //!< The highest score found so far
+  std::size_t best_z;                             //!< The lowest Z(G) found so far
 
   /**
   * @brief Executes the genetic evolution loop.
@@ -162,9 +164,27 @@ public:
 
   /**
    * @brief Tracks stagnation in the evolution process.
+   * @return The number of generations elapsed since the last improvement in score.
+   */
+  std::size_t time_since_better_score() const;
+
+  /**
+   * @brief Tracks stagnation in the evolution process.
    * @return The number of generations elapsed since the last improvement in Z(G).
    */
-  std::size_t time_since_best() const;
+  std::size_t time_since_better_z() const;
+
+  /**
+   * @brief Tracks the current best score
+   * @return The highest score seen so far
+   */
+  double current_score() const;
+
+  /**
+   * @brief Tracks the current best Z(G)
+   * @return The lowest Z(G) seen so far
+   */
+  std::size_t current_z() const;
 };
 
 #endif

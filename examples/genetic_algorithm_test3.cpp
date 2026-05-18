@@ -2,7 +2,6 @@
 #include <iostream>
 #include <cassert>
 
-#include <limits>
 #include <nauty/naututil.h>
 #include <nauty/gtools.h>
 #include <nauty/nauty.h>
@@ -17,24 +16,8 @@
 //  If G ~ P ~ V ~ E -> O(x^4) on average
 */
 
-int main(int argc, char* argv[]) {
-  if (argc < 2) {
-    std::cerr << "Usage: " << argv[0] << " <number_of_graphs> <population_size> <generations_before_quit> <graph_order>" << "\n";
-    return 1; 
-  }
-
-  std::size_t num_graphs;
-  std::size_t population_size;
-  std::size_t generations_before_quit;
-  std::size_t order;
-
-  num_graphs = std::stoull(argv[1]);
-  population_size = std::stoull(argv[2]);
-  generations_before_quit = std::stoull(argv[3]);
-  order = std::stoull(argv[4]);
-
-  std::vector<Graph> graphs = Graph::generate_random(order, num_graphs, 0.5);
-  // graphs.push_back(Graph::generate_path(order));
+std::size_t test_graphs(std::size_t order, std::size_t num_graphs, double edge_prob) {
+  std::vector<Graph> graphs = Graph::generate_random(order, num_graphs, edge_prob);
 
   double total_error = 0;
   double num_failed = 0;
@@ -51,33 +34,32 @@ int main(int argc, char* argv[]) {
 
     start = std::chrono::high_resolution_clock::now();
 
-    GeneticSolver solver(&graph, population_size);
+    GeneticSolver solver(&graph, order);
     VertexSet result;
-    std::size_t best = std::numeric_limits<std::size_t>::max();
  
     generation = 0;
     while (true) {
       result = std::move(solver.run_set(1)); //std::sqrt(graph.get_order())));
       generation++;
-      if (solver.time_since_better_z() == 0) std::cout << "Gen " << generation << ": Better Z(G) -> " << solver.current_z() << "\n";
-      else if (solver.time_since_better_score() == 0) std::cout << "Gen " << generation << ": Better Score -> " << solver.current_score() << "\n";
-      else std::cout << "Gen " << generation << "\n";
-      if (solver.time_since_better_score() > generations_before_quit) break;
+      //if (solver.time_since_better_z() == 0) std::cout << "Gen " << generation << ": Better Z(G) -> " << solver.current_z() << "\n";
+      //else if (solver.time_since_better_score() == 0) std::cout << "Gen " << generation << ": Better Score -> " << solver.current_score() << "\n";
+      //else std::cout << "Gen " << generation << "\n";
+      if (solver.time_since_better_score() > 8) break;
     }
 
     end = std::chrono::high_resolution_clock::now();
     double duration = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()) / 1000 / 1000;
 
-    std::cout << "Observed Z(G): " << result.size() << "\n";
-    std::cout << "Compute Time: " << duration << " seconds" << "\n";
+    //std::cout << "Observed Z(G): " << result.size() << "\n";
+    //std::cout << "Compute Time: " << duration << " seconds" << "\n";
 
     std::size_t expected = zero_forcing_wavefront(graph);
     std::int64_t delta = result.size() - expected;
 
-    std::cout << "Real Z(G): " << expected << "\n";
-    std::cout << "Delta: " << delta << "\n";
+    //std::cout << "Real Z(G): " << expected << "\n";
+    //std::cout << "Delta: " << delta << "\n";
     if (delta < 0) {
-      std::cerr << "Crital Error: Zero forcing closure logic failed" << "\n";
+      //std::cerr << "Crital Error: Zero forcing closure logic failed" << "\n";
       return 1;
     }
 
@@ -85,13 +67,13 @@ int main(int argc, char* argv[]) {
     while (result.size() != expected) {
       result = std::move(solver.run_set(1));
       generation++;
-      if (solver.time_since_better_z() == 0) std::cout << "Gen " << generation << ": Better Z(G) -> " << solver.current_z() << "\n";
-      else if (solver.time_since_better_score() == 0) std::cout << "Gen " << generation << ": Better Score -> " << solver.current_score() << "\n";
-      else std::cout << "Gen " << generation << "\n";
+      //if (solver.time_since_better_z() == 0) std::cout << "Gen " << generation << ": Better Z(G) -> " << solver.current_z() << "\n";
+      //else if (solver.time_since_better_score() == 0) std::cout << "Gen " << generation << ": Better Score -> " << solver.current_score() << "\n";
+      //else std::cout << "Gen " << generation << "\n";
     }
-    std::cout << "Expected answer took " << generation << " generation(s)" << "\n";
+    //std::cout << "Expected answer took " << generation << " generation(s)" << "\n";
 
-    std::cout << "\n";
+    // std::cout << "\n";
 
     total_error += static_cast<double>(delta) / order;
     if (delta != 0) num_failed++;
@@ -103,8 +85,22 @@ int main(int argc, char* argv[]) {
   double fail_rate = num_failed / num_graphs;
   double average_generations = total_generations / num_graphs;
 
+  std::cout << "Order: " << order << "\n";
+  std::cout << "Number of Graphs: " << num_graphs << "\n";
+  std::cout << "Edge Probability: " << edge_prob << "\n"; 
   std::cout << "Average Accuracy: " << average_accuracy*100 << "%" << "\n";
   std::cout << "Average Error: " << average_error*100 << "%" << "\n";
   std::cout << "Fail Rate: " << fail_rate*100 << "%" << "\n";
   std::cout << "Average #Generations: " << average_generations << "\n";
+  std::cout << "\n";
+
+  return num_failed;
+}
+
+int main(int argc, char* argv[]) {
+  for (std::size_t a = 3; a < 32; a++) {
+    for (double prob = 0.3; prob < 0.9; prob += 0.1) {
+      if (test_graphs(a, a, prob)) return 1;
+    }
+  }
 }

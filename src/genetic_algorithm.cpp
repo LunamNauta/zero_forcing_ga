@@ -12,10 +12,12 @@ GeneticSolver::GeneticSolver(const Graph *gi, std::size_t population_size) :
   population(population_size),
   sampler(gi),
   gen(std::random_device{}()),
-  best_score(std::numeric_limits<std::size_t>::max()),
-  since_best(0),
   mutation_rate(GA_MUTATION_PCT),
-  elite_pct(GA_ELITE_PCT)
+  elite_pct(GA_ELITE_PCT),
+  since_better_score(0),
+  since_better_z(0),
+  best_score(std::numeric_limits<double>::min()),
+  best_z(std::numeric_limits<std::size_t>::max())
 {
   initialize_population();
 }
@@ -28,6 +30,8 @@ void GeneticSolver::initialize_population() {
     VertexBitset initial = sampler.sample_bitset(order);
     population[a].genes = initial;
   }
+
+  score_population();
 }
 
 void GeneticSolver::score_individual(Individual &ind) {
@@ -183,62 +187,16 @@ void GeneticSolver::fix_individual(Individual &ind) {
     if (forced.count() == graph->get_order()) break;
     acknowledge_fort(~forced);
 
-    // Find vertices with exactly two uncolored neighbors
-    // Coloring one of the uncolored neighbors then colors the second automatically
-    bool found_clog = false;
-    for (Vertex u = 0; u < graph->get_order(); ++u) {
-      if (!forced[u]) continue;
-      std::size_t unforced = 0;
-      bool on1 = true;
-      Vertex uncolored1 = 0;
-      Vertex uncolored2 = 0;
-      for (Vertex v : graph->get_adjacent(u)) {
-        if (forced[v]) continue;
-        if (on1) uncolored1 = v;
-        else uncolored2 = v;
-        on1 = !on1;
-        unforced++;
-      }
-      if (unforced == 2) {
-        ind.genes.set(uncolored1);
-        forced.set(uncolored1);
-        forced.set(uncolored2);
-        found_clog = true;
-        break;
-      }
-    }
-    if (found_clog) continue;
-
-    // Find all vertices that are directly preventing zero forcing
-    VertexBitset edge(graph->get_order(), false);
-    if (forced.count() != 0) {
-      for (Vertex u = 0; u < graph->get_order(); u++){
-        if (!forced[u]) continue;
-        for (Vertex v : graph->get_adjacent(u)) {
-          if (forced[v]) continue;
-          edge.set(v);
-        }
-      }
-    }
-    else edge.set();
-
-    // Add 1 vertex from each of the known forts that wasn't covered
-    // Prioritize vertices that are both in the fort and preventing zero forcing
-    for (std::unordered_set<VertexBitset>::const_iterator it_fort = known_forts.cbegin(); it_fort != known_forts.cend(); it_fort++) {
-      if ((*it_fort & forced).any()) continue; // Ignore this fort if we've already covered it
-      VertexBitset verts; // = sampler.sample_bitset(1, ~*it_fort);
-      if ((*it_fort & edge).any()) verts = std::move(sampler.sample_bitset(1, ~(*it_fort & edge)));
-      else verts = std::move(sampler.sample_bitset(1, ~*it_fort));
-      ind.genes |= verts;
-      forced |= verts;
-    }
+    VertexBitset verts = std::move(sampler.sample_bitset(1, forced));
+    ind.genes |= verts;
+    forced |= verts;
   }
 
   // Attempt to remove vertices
   for (Vertex v = 0; v < graph->get_order(); ++v) {
     if (ind.genes[v]) {
       ind.genes.reset(v);
-      VertexBitset forced(ind.genes);
+      forced = ind.genes;
       zero_forcing_closure(*graph, forced);
       if (forced.count() < graph->get_order()) ind.genes.set(v);
     }
@@ -272,6 +230,7 @@ void GeneticSolver::acknowledge_fort(const VertexBitset &fort) {
 }
 
 VertexBitset GeneticSolver::extract_smaller_fort(VertexBitset fort) {
+  /*
   VertexBitset closure = ~fort;
 
   for (Vertex u = 0; u < graph->get_order(); u++) {
@@ -284,16 +243,12 @@ VertexBitset GeneticSolver::extract_smaller_fort(VertexBitset fort) {
     
     if (forced.count() != graph->get_order()) closure = forced;
   }
+  */
 
-  return ~closure;
+  return fort;
 }
 
 Individual GeneticSolver::run(std::size_t num_generations) {
-  // Score the current population (either from initialization or from a previous run)
-  score_population();
-  std::size_t since_better = 0;
-  double best_score_raw = 0;
-
   for (std::size_t a = 0; a < num_generations; a++) {
     // Crossover + mutate + re-score
     crossover_population();
@@ -303,26 +258,26 @@ Individual GeneticSolver::run(std::size_t num_generations) {
     score_population();
     
     // Update the time since an improvement was made
-    if (population[0].genes.count() < best_score) {
-      best_score = population[0].genes.count();
-      since_best = 0;
+    if (population[0].forces && population[0].genes.count() < best_z) {
+      best_z = population[0].genes.count();
+      since_better_z = 0;
     }
-    else since_best++;
+    else since_better_z++;
 
-    if (population[0].score > best_score_raw) {
-      best_score_raw = population[0].score;
-      since_better = 0;
+    if (population[0].forces && population[0].score > best_score) {
+      best_score = population[0].score;
+      since_better_score = 0;
     }
-    else since_better++;
+    else since_better_score++;
 
     // If we haven't seen improvement, increase the mutation rate, and decrease the number of elites
-    if (since_better > population.size()) {
-      mutation_rate *= 1.01;
-      elite_pct *= 0.99;
+    if (since_better_score > population.size()) {
+      mutation_rate *= 1.05;
+      elite_pct *= 0.95;
     }
     else {
-      mutation_rate *= 0.99;
-      elite_pct *= 1.01;
+      mutation_rate *= 0.95;
+      elite_pct *= 1.05;
     }
 
     mutation_rate = std::max(0.0, std::min(mutation_rate, GA_MUTATION_PCT));
@@ -341,6 +296,18 @@ VertexSet GeneticSolver::run_set(std::size_t num_generations) {
   return chromosome_to_set(run(num_generations).genes);
 }
 
-std::size_t GeneticSolver::time_since_best() const {
-  return since_best;
+std::size_t GeneticSolver::time_since_better_score() const {
+  return since_better_score;
+}
+
+std::size_t GeneticSolver::time_since_better_z() const {
+  return since_better_z;
+}
+
+double GeneticSolver::current_score() const {
+  return best_score;
+}
+
+std::size_t GeneticSolver::current_z() const {
+  return best_z;
 }
