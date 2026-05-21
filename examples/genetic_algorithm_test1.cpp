@@ -1,107 +1,107 @@
+#include <chrono>
 #include <iostream>
 #include <cassert>
 
+#include <limits>
+#include <nauty/naututil.h>
+#include <nauty/gtools.h>
+#include <nauty/nauty.h>
+
 #include "genetic_algorithm.hpp"
-#include "zero_forcing.hpp"
 #include "graph.hpp"
+#include "zero_forcing.hpp"
 
-bool is_valid_zero_forcing(const Graph &graph, const VertexSet &filled) {
-  VertexSet tmp(filled);
-  zero_forcing_closure(graph, tmp);
-  return tmp.size() == graph.get_order();
-}
+/*
+// GeneticSolver::run -> 
+//  O(G*P*(V*E))
+//  If G ~ P ~ V ~ E -> O(x^4) on average
+*/
 
-void test_empty() {
-  Graph graph;
-  // : -> empty
-  graph.from_sparse6(":");
-  
-  GeneticSolver solver(&graph, 100);
-  VertexSet result = solver.run_set(100);
+int main(int argc, char* argv[]) {
+  if (argc < 2) {
+    std::cerr << "Usage: " << argv[0] << " <number_of_graphs> <population_size> <generations_before_quit> <graph_order>" << "\n";
+    return 1; 
+  }
 
-  assert(is_valid_zero_forcing(graph, result));
-  assert(result.size() == 0);
+  std::size_t num_graphs;
+  std::size_t population_size;
+  std::size_t generations_before_quit;
+  std::size_t order;
 
-  std::cout << "Test Empty: Passed" << "\n";
-}
+  num_graphs = std::stoull(argv[1]);
+  population_size = std::stoull(argv[2]);
+  generations_before_quit = std::stoull(argv[3]);
+  order = std::stoull(argv[4]);
 
-void test_single() {
-  Graph graph;
-  // ":@" -> single
-  graph.from_sparse6(":@");   
+  std::vector<Graph> graphs = Graph::generate_random(order, num_graphs, 0.8);
 
-  GeneticSolver solver(&graph, 100);
-  VertexSet result = solver.run_set(100);
+  double total_error = 0;
+  double num_failed = 0;
+  double total_generations = 0;
+  std::size_t generation = 0;
+  std::size_t best_generation = 0;
 
-  assert(is_valid_zero_forcing(graph, result));
-  assert(result.size() == 1);
+  std::chrono::time_point<std::chrono::high_resolution_clock> start;
+  std::chrono::time_point<std::chrono::high_resolution_clock> end;
 
-  std::cout << "Test Single: Passed" << "\n";
-}
+  for (const Graph &graph : graphs) {
+    if (!graph.is_connected()) continue;
 
-void test_k2() {
-  Graph graph;
-  // ":A_" -> k2
-  graph.from_sparse6(":A_");
+    start = std::chrono::high_resolution_clock::now();
 
-  GeneticSolver solver(&graph, 100);
-  VertexSet result = solver.run_set(100);
+    GeneticSolver solver(&graph, population_size);
+    std::size_t best = std::numeric_limits<std::size_t>::max();
+ 
+    generation = 0;
+    while (true) {
+      solver.run(1);
+      generation++;
+      if (solver.since_better_z() == 0) std::cout << "Gen " << generation << ": Better Z(G) -> " << solver.best_z() << "\n";
+      else if (solver.since_better_score() == 0) std::cout << "Gen " << generation << ": Better Score -> " << solver.best_score() << "\n";
+      // else std::cout << "Gen " << generation << "\n";
+      if (solver.since_better_score() > generations_before_quit) break;
+    }
 
-  assert(is_valid_zero_forcing(graph, result));
-  assert(result.size() == 1);
+    end = std::chrono::high_resolution_clock::now();
+    double duration = static_cast<double>(std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()) / 1000 / 1000;
 
-  std::cout << "Test K2: Passed" << "\n";
-}
+    std::cout << "Observed Z(G): " << solver.best_z() << "\n";
+    std::cout << "Compute Time: " << duration << " seconds" << "\n";
 
-void test_p3() {
-  Graph graph;
-  // ":B_O" -> p3
-  graph.from_sparse6(":Bd");
+    std::size_t expected = zero_forcing_wavefront(graph);
+    std::int64_t delta = solver.best_z() - expected;
 
-  GeneticSolver solver(&graph, 100);
-  VertexSet result = solver.run_set(100);
+    std::cout << "Real Z(G): " << expected << "\n";
+    std::cout << "Delta: " << delta << "\n";
+    if (delta < 0) {
+      std::cerr << "Crital Error: Zero forcing closure logic failed" << "\n";
+      return 1;
+    }
 
-  assert(is_valid_zero_forcing(graph, result));
-  assert(result.size() == 1);
+    if (solver.best_z() != expected) std::cout << "Attempting to reach expected answer" << "\n";
+    while (solver.best_z() != expected) {
+      solver.run(1);
+      generation++;
+      if (solver.since_better_z() == 0) std::cout << "Gen " << generation << ": Better Z(G) -> " << solver.best_z() << "\n";
+      else if (solver.since_better_score() == 0) std::cout << "Gen " << generation << ": Better Score -> " << solver.since_better_score() << "\n";
+      else std::cout << "Gen " << generation << "\n";
+    }
+    std::cout << "Expected answer took " << generation << " generation(s)" << "\n";
 
-  std::cout << "Test P3: Passed" << "\n";
-}
+    std::cout << "\n";
 
-void test_star5() {
-  Graph graph;
-  // ":DaG_ -> star5"
-  graph.from_sparse6(":DaG_");
+    total_error += static_cast<double>(delta) / order;
+    if (delta != 0) num_failed++;
+    total_generations += generation;
+  }
 
-  GeneticSolver solver(&graph, 100);
-  VertexSet result = solver.run_set(100);
+  double average_accuracy = 1.0 - total_error / num_graphs;
+  double average_error = total_error / num_graphs;
+  double fail_rate = num_failed / num_graphs;
+  double average_generations = total_generations / num_graphs;
 
-  assert(is_valid_zero_forcing(graph, result));
-  assert(result.size() == 3);
-
-  std::cout << "Test Star5: Passed" << "\n";
-}
-
-void test_c4() {
-  Graph graph;
-  // ":Cdo" -> C4
-  graph.from_sparse6(":Cdo");
-
-  GeneticSolver solver(&graph, 100);
-  VertexSet result = solver.run_set(100);
-
-  assert(is_valid_zero_forcing(graph, result));
-  assert(result.size() == 2);
-
-  std::cout << "Test Cycle 4: Passed" << "\n";
-}
-
-int main() {
-  test_empty();
-  test_single();
-  test_k2();
-  test_p3();
-  test_star5();
-  test_c4();
-
-  std::cout << "\nAll Genetic Algorithm Tests Completed!" << "\n";
+  std::cout << "Average Accuracy: " << average_accuracy*100 << "%" << "\n";
+  std::cout << "Average Error: " << average_error*100 << "%" << "\n";
+  std::cout << "Fail Rate: " << fail_rate*100 << "%" << "\n";
+  std::cout << "Average #Generations: " << average_generations << "\n";
 }

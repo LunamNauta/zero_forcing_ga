@@ -1,8 +1,9 @@
 #include "zero_forcing.hpp"
-#include "graph.hpp"
 
 #include <limits>
 #include <list>
+
+#include "graph.hpp"
 
 std::size_t zero_forcing_closure(const Graph &graph, VertexBitset &filled) {
   std::vector<std::size_t> white_degree(graph.get_order());
@@ -79,6 +80,73 @@ std::size_t zero_forcing_closure(const Graph &graph, VertexSet &filled) {
 }
 
 std::size_t zero_forcing_wavefront(const Graph &graph, std::size_t upper_bound) {
+  if (graph.get_order() == 0) return 0;
+  upper_bound = std::min(graph.get_order(), upper_bound);
+
+  std::list<std::pair<VertexBitset, std::size_t>> cl_pairs;
+  cl_pairs.emplace_back(VertexBitset(graph.get_order(), false), 0);
+
+  for (std::size_t R = 1; R <= upper_bound - 1; R++) {
+    std::list<std::pair<VertexBitset, std::size_t>> next_cl_pairs;
+
+    // Use structured binding for cleaner access
+    for (const auto& [S, r] : cl_pairs) {
+      for (Vertex v = 0; v < graph.get_order(); v++) {
+        std::size_t r_new = r;
+        if (!S.test(v)) r_new++;
+
+        const VertexSet& neighbors = graph.get_adjacent(v);
+        std::size_t neighbors_outside_S = 0;
+        
+        for (Vertex neighbor : neighbors) {
+          if (!S.test(neighbor)) neighbors_outside_S++;
+        }
+        
+        if (neighbors_outside_S > 1) r_new += (neighbors_outside_S - 1);
+
+        // Prune paths early
+        if (r_new != R) continue;
+
+        VertexBitset S_new = S; 
+        S_new.set(v);
+        for (Vertex u : neighbors) S_new.set(u);
+
+        zero_forcing_closure(graph, S_new);
+
+        if (S_new.count() == graph.get_order()) return r_new;
+
+        bool already_present = false;
+        
+        // Check the main list for duplicates or better paths
+        for (const auto& existing : cl_pairs) {
+          if (existing.first == S_new && existing.second <= r_new) {
+            already_present = true;
+            break;
+          }
+        }
+
+        // Check the pending generation list to prevent duplicate branching
+        if (!already_present) {
+          for (const auto& pending : next_cl_pairs) {
+            if (pending.first == S_new && pending.second <= r_new) {
+              already_present = true;
+              break;
+            }
+          }
+        }
+
+        if (!already_present) {
+          next_cl_pairs.emplace_back(std::move(S_new), r_new);
+        }
+      }
+    }
+    cl_pairs.splice(cl_pairs.end(), next_cl_pairs);
+  }
+
+  return upper_bound;
+}
+
+std::size_t zero_forcing_wavefront_old(const Graph &graph) {
   if (graph.get_order() == 0) return 0;
 
 	std::list<std::pair<VertexSet, std::size_t>> cl_pairs;

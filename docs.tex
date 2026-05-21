@@ -1,0 +1,204 @@
+
+
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+
+% Core packages
+\usepackage{amsmath,amssymb}
+\usepackage{tikz-cd}
+\usepackage{multicol}
+
+% Paragraphs
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1\baselineskip}
+
+\title{Zero Forcing Genetic Algorithm}
+\author{Ayden Kranz}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{General Definitions}
+
+Let $G=(V,E)$ be an undirected graph with vertex set $V$ and edge set $E$ \\
+Let $V=\{0, 1, \dots, n-1\}$
+
+\section{Random Sampler}
+
+\subsection{Definitions}
+
+Let $I \subset V$ \\
+Let $u \in V$
+
+Let $c^{(t)}$ be a vector of order $n$ where $c_u^{(t)}$ is the count of forts observed by vertex $u$ at timestep $t$
+$$c^{(t)} \in \mathbb{N}_0^n$$
+$$c_u^{(0)} = 0$$
+$$c_u^{(t+1)} = \begin{cases} c_u^{(t)} + 1 & \text{if } u \in F \\ c_u^{(t)} & \text{otherwise} \end{cases}$$
+
+Let $N^{(t)}$ be the count of forts observed by the sampler at timestep $t$
+$$N^{(t)} \in \mathbb{N}_0$$
+$$N^{(0)} = 0$$
+$$N^{(t+1)} = N^{(t)} + 1$$
+
+Let $W^{(t)}(u)$ be the normalized weight of vertex $u$ at timestep $t$
+$$W^{(t)}: V \to \mathbb{R}^+$$
+$$W^{(t)}(u) = \epsilon + \frac{c_u^{(t)}}{N^{(t)}} \quad \text{where } \epsilon \in \mathbb{R}^+ \text{ and } \epsilon > 0$$
+
+Let $T^{(t)}(I)$ be the sum of the normalized weights of all vertices $u \in V \setminus I$ at timestep $t$
+$$T^{(t)}: \mathcal{P}(V) \to \mathbb{R}^+$$
+$$T^{(t)}(I) = \sum_{u \in V \setminus I}{W^{(t)}(u)}$$
+
+\subsection{Functions}
+
+\subsubsection{Highest Weighted Vertices}
+
+Let $\text{SampleH}(k, I)$ be a weighted random subset of $\min(k, |V \setminus I|)$ vertices from $V \setminus I$ 
+$$k \in \mathbb{N}$$
+$$\forall u \in V \setminus I: \begin{cases}
+    B_u \sim \text{Uniform}(0, 1) \\ 
+    a_u = \frac{W^{(t)}(u)}{T^{(t)}(I)} \\ 
+    W_u = B_u^{\frac{1}{a_u}}
+\end{cases}$$
+$$\text{SampleH}(k, I) = \arg \overset{\min(k, |\mathbb{V} \setminus I|)}{\max_{\substack{u \in \mathbb{V} \setminus I}}}(W_u)$$
+
+\subsubsection{Lowest Weighted Vertices}
+
+Let $\text{SampleL}(k, I)$ be a weighted random subset of $\min(k, |V \setminus I|)$ vertices from $V \setminus I$ 
+$$k \in \mathbb{N}$$
+$$\forall u \in V \setminus I: \begin{cases}
+    B_u \sim \text{Uniform}(0, 1) \\ 
+    a_u = \frac{T^{(t)}(I)}{W^{(t)}(u)} \\ 
+    W_u = B_u^{\frac{1}{a_u}}
+\end{cases}$$
+$$\text{SampleL}(k, I) = \arg \overset{\min(k, |\mathbb{V} \setminus I|)}{\max_{\substack{u \in \mathbb{V} \setminus I}}}(W_u)$$
+
+\section{Genetic Algorithm}
+
+\subsection{Definitions}
+
+Let $\mathcal{P}$ be set of individuals in the population
+$$\mathcal{P} \in C^{P}$$
+
+Let $m$ be the chance of a mutation ocurring per vertex
+$$m \in (0, 1)$$
+
+Let $w_b$ be the weight of the fitness score corresponding to smaller zero forcing sets
+$$w_b \in \mathcal{R}^+$$
+
+Let $w_p$ be the weight of the fitness score corresponding to failed zero forcing sets
+$$w_p \in \mathcal{R}^+$$
+
+\subsubsection{Individual}
+
+Let $C$ be a candidate individual representing $Z(G)$ \\
+
+Let $C_{gene}$ be the bitset representing the candidate solution for $Z(G)$:
+$$C_{gene} \in \mathbb{B}^n$$
+$$C_{gene, u} = \begin{cases}
+\text{1} & \text{if } u \text{ is in the zero forcing set} \\
+\text{0} & \text{else}
+\end{cases}$$
+
+Let $C_{order}$ be the order of the candidate solution:
+$$C_{order} \in \mathbb{N}$$
+$$C_{order} = \sum_{u \in V}{C_{gene, u}}$$
+
+Let $C_{forces}$ be a bitflag representing whether the candidate solution is a valid zero forcing set:
+$$C_{forces} \in \mathbb{B}$$
+$$C_{forces} = \begin{cases}
+\text{1} & \text{if } \text{cl}(C_{gene}) = n \\
+\text{0} & \text{else}
+\end{cases}$$
+
+Let $C_{score}$ be the fitness score of the candidate solution:
+$$C_{score} \in \mathbb{R}^+$$
+$$C_{score} = \frac{w_b(n - C_{order})}{w_p(1 + n - |\text{cl}(C_{gene}|))}$$
+
+\subsection{Functions}
+
+\subsubsection{Mutate Individual}
+
+Let $C$ be the individual to mutate:
+$$\forall g \in C_{gene} \quad g \leftarrow g \oplus m_u, \quad \text{where } m_u \sim \text{Bernoulli}(m)$$
+
+\subsubsection{Reduce Individual}
+
+Let $C$ be the individual to reduce. Assume $C_{forces}$ = 1:
+$$\begin{array}{ll}
+\forall g \in C_{gene} | g=1 \text{ do:} \\
+\quad 1. \quad C_{gene} = 0 \\
+\quad 2. \quad L = \text{cl}(C_{gene}) \\
+\quad 3. \quad C_{gene} = 1, \quad\text{if } |L| < n
+\end{array}$$
+
+\subsubsection{Fix Individual}
+
+Let $C$ be the individual to fix:
+$$\begin{array}{ll}
+\text{While not } C_{forces} \text{ do:} \\
+\quad 1. \quad L = \text{cl}(C_{gene}) \\
+\quad 2. \quad \text{AcknowledgeFort}(V \setminus L) \\
+\quad 3. \quad C_{gene} \leftarrow C_{gene} | SampleH(1, L)
+\end{array}$$
+$$\text{ReduceIndividual}(C)$$
+
+\subsubsection{Crossover Individual}
+
+Let $T$ be the size of the tournament selection \\
+Let $X$ be an individual \\
+Let $X_{child}$ be the result of the crossover \\
+
+$$\{p_1, p_2\} = \arg \overset{2}{\max_{\substack{C \in \{c_1, c_2, \dots, c_T\}}}}(C_{score}), \quad \text{where } c_k \sim \text{Uniform}(\mathcal{P})$$
+$$S_{space} = p_{1,gene} \cup p_{2,gene} \cup \epsilon, \quad \text{where } \epsilon_u \sim \text{Bernoulli}(0.1)$$
+$$m = \min(p_{1,order}, p_{2,order})$$
+$$\forall k \in \{0, 1, \dots, m - 1\}, \quad X_{gene}^{(k)} \sim \text{SampleH}(k, V \setminus S_{space})$$
+$$X_{best} = \arg \max_{\substack{k \in \{0, 1, \dots, m - 1\}}}(X_{score}^{(k)})$$
+$$X_{child} = \begin{cases}
+    X_{best} & \text{if } |\text{cl}(X_{best})| = n \\
+    S_{space} & \text{else}
+\end{cases}$$
+
+\subsubsection{Initialize Population}
+
+$$\Delta = \frac{n-1}{|\mathcal{P}|}$$
+$$\forall k \in \{1, 1+\Delta, 1+2\Delta, \dots, 1+|\mathcal{P}|\Delta\}: \begin{cases}
+C_{gene} = \text{SampleH}(k, \emptyset) \\
+\text{Add } C \text{ to } \mathcal{P}
+\end{cases}$$
+$$\text{FixPopulation}()$$
+
+\subsubsection{Mutate Population}
+
+$$\forall c \in \mathcal{P} \quad \text{MutateIndividual(c)}$$
+
+\subsection{Fix Population}
+
+$$\forall c \in \mathcal{P} \quad \text{FixIndividual(c)}$$
+
+\subsubsection{Crossover Population}
+
+$$P_{next} \in C^{|P|}$$
+$$C_{best} = \arg \max_{\substack{c \in \mathcal{P}}}(c_{score})$$
+$$\text{Add } C_{best} \text{ to } P_{next}$$
+$$\begin{array}{ll}
+\text{While } |P_{next}| < |P| \text{ do:} \\
+\quad 1. \quad C_{next} = \text{CrossoverIndividual()} \\
+\quad 2. \quad \text{Add } C_{next} \text{ to } P_{next}
+\end{array}$$
+$$P \leftarrow P_{next}$$
+
+\subsubsection{Optimize}
+
+Let $k \in \mathbb{N}$ be the current generation and $K \in \mathbb{N}$ be the total number of generations
+
+$$\text{InitializePopulation()}$$
+$$\begin{array}{ll}
+\text{For } k = 1 \rightarrow K \text{ do:} \\
+\quad 1. \quad \text{CrossoverPopulation()} \\
+\quad 2. \quad \text{MutatePopulation()} \\
+\quad 3. \quad \text{FixPopulation()}
+\end{array}$$
+
+\end{document}
+

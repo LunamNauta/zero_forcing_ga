@@ -43,7 +43,7 @@ void RandomSampler::update_weights(const VertexSet &fort) {
   nf++;
 }
 
-VertexBitset RandomSampler::sample_bitset(std::size_t num_samples, VertexBitset ignored) {
+VertexBitset RandomSampler::sample_bitset(std::size_t num_samples, VertexBitset ignored, bool invert) {
   // Default conditions for empty samples or graph
   if (num_samples == 0 || graph->get_order() == 0) return {};
   // Bound number of samples
@@ -63,7 +63,8 @@ VertexBitset RandomSampler::sample_bitset(std::size_t num_samples, VertexBitset 
     // Vertex weight is rand^(1/(weight / total_weight))
     double base = dist(gen);
     double weight = get_weight(u);
-    candidates.emplace_back(u, std::pow(base, 1.0 / (weight / total_weight)));
+    double ratio = invert ? weight / total_weight : total_weight / weight;
+    candidates.emplace_back(u, std::pow(base, ratio));
   }
 
   // Sort the potential samples based on their weight
@@ -79,7 +80,7 @@ VertexBitset RandomSampler::sample_bitset(std::size_t num_samples, VertexBitset 
   return sample;
 }
 
-VertexSet RandomSampler::sample_set(std::size_t num_samples, const VertexSet &ignored) {
+VertexSet RandomSampler::sample_set(std::size_t num_samples, const VertexSet &ignored, bool invert) {
   // Default conditions for empty samples or graph
   if (num_samples == 0 || graph->get_order() == 0) return {};
 
@@ -98,7 +99,8 @@ VertexSet RandomSampler::sample_set(std::size_t num_samples, const VertexSet &ig
     // Vertex weight is rand^(1/(weight / total_weight))
     double base = dist(gen);
     double weight = get_weight(u);
-    candidates.emplace_back(u, std::pow(base, 1.0 / (weight / total_weight)));
+    double ratio = invert ? weight / total_weight : total_weight / weight;
+    candidates.emplace_back(u, std::pow(base, ratio));
   }
 
   // Sort the potential samples based on their weight
