@@ -2,7 +2,6 @@
 #include <iostream>
 #include <cassert>
 
-#include <limits>
 #include <nauty/naututil.h>
 #include <nauty/gtools.h>
 #include <nauty/nauty.h>
@@ -33,13 +32,15 @@ int main(int argc, char* argv[]) {
   generations_before_quit = std::stoull(argv[3]);
   order = std::stoull(argv[4]);
 
-  std::vector<Graph> graphs = Graph::generate_random(order, num_graphs, 0.8);
+  std::vector<Graph> graphs = Graph::generate_random(order, num_graphs, 0.6);
 
   double total_error = 0;
   double num_failed = 0;
   double total_generations = 0;
   std::size_t generation = 0;
   std::size_t best_generation = 0;
+  std::size_t generation_found = 0;
+  std::size_t max_generation = 0;
 
   std::chrono::time_point<std::chrono::high_resolution_clock> start;
   std::chrono::time_point<std::chrono::high_resolution_clock> end;
@@ -50,13 +51,19 @@ int main(int argc, char* argv[]) {
     start = std::chrono::high_resolution_clock::now();
 
     GeneticSolver solver(&graph, population_size);
-    std::size_t best = std::numeric_limits<std::size_t>::max();
  
+    std::cout << "Gen 0: Better Z(G) -> " << solver.best_z() << "\n";
+
     generation = 0;
+    generation_found = 0;
     while (true) {
       solver.run(1);
       generation++;
-      if (solver.since_better_z() == 0) std::cout << "Gen " << generation << ": Better Z(G) -> " << solver.best_z() << "\n";
+      if (solver.since_better_z() == 0) {
+        std::cout << "Gen " << generation << ": Better Z(G) -> " << solver.best_z() << "\n";
+        generation_found = generation;
+        max_generation = std::max(max_generation, generation);
+      }
       else if (solver.since_better_score() == 0) std::cout << "Gen " << generation << ": Better Score -> " << solver.best_score() << "\n";
       // else std::cout << "Gen " << generation << "\n";
       if (solver.since_better_score() > generations_before_quit) break;
@@ -82,17 +89,21 @@ int main(int argc, char* argv[]) {
     while (solver.best_z() != expected) {
       solver.run(1);
       generation++;
-      if (solver.since_better_z() == 0) std::cout << "Gen " << generation << ": Better Z(G) -> " << solver.best_z() << "\n";
+      if (solver.since_better_z() == 0) {
+        std::cout << "Gen " << generation << ": Better Z(G) -> " << solver.best_z() << "\n";
+        generation_found = generation;
+        max_generation = std::max(max_generation, generation);
+      }
       else if (solver.since_better_score() == 0) std::cout << "Gen " << generation << ": Better Score -> " << solver.since_better_score() << "\n";
       else std::cout << "Gen " << generation << "\n";
     }
-    std::cout << "Expected answer took " << generation << " generation(s)" << "\n";
+    std::cout << "Expected answer took " << generation_found << " generation(s)" << "\n";
 
     std::cout << "\n";
 
     total_error += static_cast<double>(delta) / order;
     if (delta != 0) num_failed++;
-    total_generations += generation;
+    total_generations += generation_found;
   }
 
   double average_accuracy = 1.0 - total_error / num_graphs;
@@ -104,4 +115,11 @@ int main(int argc, char* argv[]) {
   std::cout << "Average Error: " << average_error*100 << "%" << "\n";
   std::cout << "Fail Rate: " << fail_rate*100 << "%" << "\n";
   std::cout << "Average #Generations: " << average_generations << "\n";
+  std::cout << "Maximum #Generations: " << max_generation << "\n";
 }
+
+/* Population size 10: (Order -> #Generations)
+20 -> 10
+32 -> 20
+64 -> 250
+*/

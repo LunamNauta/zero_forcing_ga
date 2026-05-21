@@ -45,7 +45,8 @@ void RandomSampler::update_weights(const VertexSet &fort) {
 
 VertexBitset RandomSampler::sample_bitset(std::size_t num_samples, VertexBitset ignored, bool invert) {
   // Default conditions for empty samples or graph
-  if (num_samples == 0 || graph->get_order() == 0) return {};
+  if (num_samples == 0 || graph->get_order() == 0) return VertexBitset(graph->get_order(), false);
+
   // Bound number of samples
   num_samples = std::min(num_samples, graph->get_order());
   ignored.resize(graph->get_order());

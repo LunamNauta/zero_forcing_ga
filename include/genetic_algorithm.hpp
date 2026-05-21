@@ -12,6 +12,7 @@ struct Individual {
   double score = 0;
   bool forces = false;
   bool dirty = true;
+  std::size_t ptime = std::numeric_limits<std::size_t>::max();
 };
 
 class GeneticSolver {
