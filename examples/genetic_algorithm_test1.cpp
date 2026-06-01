@@ -51,14 +51,24 @@ int main(int argc, char* argv[]) {
     start = std::chrono::high_resolution_clock::now();
 
     GeneticSolver solver(&graph, population_size);
+    
+    double best_variance = solver.variance();
  
     std::cout << "Gen 0: Better Z(G) -> " << solver.best_z() << "\n";
+    std::cout << "Gen 0: Initial Variance -> " << best_variance << "\n";
 
     generation = 0;
     generation_found = 0;
     while (true) {
       solver.run(1);
       generation++;
+      
+      double current_variance = solver.variance();
+      if (current_variance < best_variance) {
+        std::cout << "Gen " << generation << ": Better Variance -> " << current_variance << "\n";
+        best_variance = current_variance;
+      }
+
       if (solver.since_better_z() == 0) {
         std::cout << "Gen " << generation << ": Better Z(G) -> " << solver.best_z() << "\n";
         generation_found = generation;
@@ -66,7 +76,12 @@ int main(int argc, char* argv[]) {
       }
       else if (solver.since_better_score() == 0) std::cout << "Gen " << generation << ": Better Score -> " << solver.best_score() << "\n";
       // else std::cout << "Gen " << generation << "\n";
-      if (solver.since_better_score() > generations_before_quit) break;
+      
+      if (current_variance < 0.1 || solver.since_better_score() > generations_before_quit) {
+        std::cout << "Gen " << generation << ": Terminating early. Variance: " << current_variance 
+                  << ", Gens since better score: " << solver.since_better_score() << "\n";
+        break;
+      }
     }
 
     end = std::chrono::high_resolution_clock::now();
@@ -89,6 +104,13 @@ int main(int argc, char* argv[]) {
     while (solver.best_z() != expected) {
       solver.run(1);
       generation++;
+      
+      double current_variance = solver.variance();
+      if (current_variance < best_variance) {
+        std::cout << "Gen " << generation << ": Better Variance -> " << current_variance << "\n";
+        best_variance = current_variance;
+      }
+
       if (solver.since_better_z() == 0) {
         std::cout << "Gen " << generation << ": Better Z(G) -> " << solver.best_z() << "\n";
         generation_found = generation;

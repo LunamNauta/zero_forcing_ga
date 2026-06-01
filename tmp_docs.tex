@@ -1,0 +1,120 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+
+% Core packages
+\usepackage{amsmath,amssymb}
+\usepackage{tikz-cd}
+\usepackage{multicol}
+
+% Paragraphs
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{1\baselineskip}
+
+\title{Untitled}
+\author{Author Name}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{General Definitions}
+
+Let $G=(V,E)$ be an undirected graph with vertex set $V$ and edge set $E$ \\
+Let $V=\{0, 1, \dots, n-1\}$
+
+\section{Random Sampler}
+
+\subsection{Definitions}
+
+Let $I \subset V$ \\
+Let $u \in V$ \\
+Let $k \in \mathbb{N}$
+
+Let $c^{(t)}$ be a vector of dimension $n$ where $c_u^{(t)}$ is the count of forts observed by vertex $u$ at timestep $t$
+$$c^{(t)} \in \mathbb{N}_0^n$$
+$$c_u^{(0)} = 0$$
+
+Let $N^{(t)}$ be the count of forts observed by the sampler at timestep $t$
+$$N^{(t)} \in \mathbb{N}_0$$
+$$N^{(0)} = 0$$
+
+Let $W_N^{(t)}(u)$ be the normalized weight of vertex $u$ at timestep $t$
+$$W_N^{(t)}(u) = \epsilon + \frac{c_u^{(t)}}{N^{(t)}} \quad \text{where } \epsilon \in \mathbb{R}^+$$
+
+Let $T^{(t)}(I)$ be the sum of the normalized weights of all vertices $u \in V \setminus I$ at timestep $t$
+$$T^{(t)}(I) = \sum_{u \in V \setminus I}{W^{(t)}(u)}$$
+
+Let $W^{(t)}(u)$ be the weight of vertex $u \in V \setminus I$ at timestep $t$. 
+Let $B \sim \text{Uniform}(0, 1)$ be a random variable
+$$a = \frac{W_N^{(t)}(u)}{T^{(t)}(I)}$$
+$$W^{(t)}(u) = B^{\frac{1}{a}}$$
+
+\subsection{Sampler Functions}
+
+\subsubsection{Sampler Update}
+
+Let $\mathcal{F}$ be a fort observed by the sampler at timestep $t + 1$
+$$c_u^{(t+1)} = \begin{cases} c_u^{(t)} + 1 & \text{if } u \in \mathcal{F} \\ c_u^{(t)} & \text{otherwise} \end{cases}$$
+$$N^{(t+1)} = N^{(t)} + 1$$
+
+\subsubsection{Highest Weighted Vertices}
+
+$$\begin{array}{l}
+\textbf{Input:} \text{ Integer } k, \text{ set } I, \text{ vertex set } V \\
+S = \text{sort}(V) \text{ in descending order of } W^{(t)}(u) \\
+R = \emptyset \\
+\textbf{For each } u \in S: \\
+\quad \textbf{if } u \notin I \textbf{ and } |R| < k \textbf{ then} \\
+\quad \quad R = R \cup {u} \\
+\textbf{Return } R
+\end{array}$$
+
+\subsubsection{Lowest Weighted Vertices}
+
+$$\begin{array}{l}
+\textbf{Input:} \text{ Integer } k, \text{ set } I, \text{ vertex set } V \\
+S = \text{sort}(V) \text{ in ascending order of } W^{(t)}(u) \\
+R = \emptyset \\
+\textbf{For each } u \in S: \\
+\quad \textbf{if } u \notin I \textbf{ and } |R| < k \textbf{ then} \\
+\quad \quad R = R \cup {u} \\
+\textbf{Return } R
+\end{array}$$
+
+\section{Genetic Algorithm}
+
+\subsection{Definitions}
+
+Let P be the size of the population, and $\mathcal{P}$ be the set of members of the population
+
+Let $m \in (0, 1)$ be the mutation rate
+
+\subsection{Individual}
+
+Let $C \subseteq V$ be an individual in the population, representing a potential initial zero forcing set.
+
+Let $\text{Fitness}(C)$ be the fitness score of individual $C$
+$$\text{Fitness}(C) = |V| - |cl(C)|$$
+
+\subsection{Fix Individual}
+
+$$\begin{array}{l}
+\textbf{Input:} \text{ Set } C, \text{ vertex set } V \\
+\textbf{While } |V| \neq |cl(C)| \textbf{ do:} \\
+\quad \text{AcknowledgeFort}(V \setminus cl(C)) \\
+\quad C = C \cup \text{SampleH}(1, cl(C)) \\
+\textbf{Return } C
+\end{array}$$
+
+\subsubsection{Reduce Individual}
+
+$$\begin{array}{l}
+\textbf{Input:} \text{ Set } C, \text{ vertex set } V \\
+\textbf{For each } u \in C: \\
+\quad D = C \setminus \{u\} \\
+\quad \textbf{if } |V| = |cl(D)| \textbf{ then} \\
+\quad \quad C = D \\
+\textbf{Return } C
+\end{array}$$
+
+\end{document}

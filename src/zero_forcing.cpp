@@ -6,46 +6,27 @@
 #include "graph.hpp"
 
 std::size_t zero_forcing_closure(const Graph &graph, VertexBitset &filled) {
-  std::vector<std::size_t> white_degree(graph.get_order());
-  std::vector<Vertex> newly_filled;
-  std::vector<Vertex> active;
-  std::vector<Vertex> next;
-  std::size_t pt = 0;
+  VertexBitset next(graph.get_order());
+  std::size_t pt;
 
-  for (Vertex u = 0; u < graph.get_order(); ++u) {
-    for (Vertex v : graph.get_adjacent(u)) {
-      if (!filled[v]) white_degree[u]++;
-    }
-    if (filled[u] && white_degree[u] == 1) active.push_back(u);
-  }
+  for (pt = 0; pt < graph.get_order(); pt++){
+    next.reset();
 
-  while (!active.empty()) {
-    newly_filled.clear();
-    next.clear();
-
-    for (Vertex u : active) {
-      if (white_degree[u] != 1) continue;
+    for (Vertex u = 0; u < graph.get_order(); u++) {
+      if (!filled.test(u)) continue;
+      std::size_t white_count = 0;
+      Vertex forced_vertex;
 
       for (Vertex v : graph.get_adjacent(u)) {
-        if (filled[v]) continue;
-        filled.set(v);
-        newly_filled.push_back(v);
-        break; 
+        if (filled.test(v)) continue;
+        if (++white_count > 1) break;
+        forced_vertex = v;
       }
+      if (white_count == 1) next.set(forced_vertex);
     }
-
-    if (newly_filled.empty()) break;
-
-    for (Vertex v : newly_filled) {
-      for (Vertex neighbor : graph.get_adjacent(v)) {
-        white_degree[neighbor]--;
-        if (filled[neighbor] && white_degree[neighbor] == 1) next.push_back(neighbor);
-      }
-      if (white_degree[v] == 1) next.push_back(v);
-    }
-
-    active = std::move(next);
-    pt++;
+    if (next.count() == 0) break;
+    
+    filled |= next;
   }
 
   if (filled.count() != graph.get_order()) return std::numeric_limits<std::size_t>::max();
