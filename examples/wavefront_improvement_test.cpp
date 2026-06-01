@@ -26,7 +26,7 @@ bool compare_ver(const Graph &graph) {
   end = std::chrono::high_resolution_clock::now();
   total_old += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
-  std::size_t upper_bound = graph.get_order(); //old_ver; // std::min(graph.get_order(), static_cast<std::size_t>(old_ver * 1.5));
+  std::size_t upper_bound = old_ver; //graph.get_order(); //old_ver; // std::min(graph.get_order(), static_cast<std::size_t>(old_ver * 1.5));
 
   start = std::chrono::high_resolution_clock::now();
   std::size_t new_ver = zero_forcing_wavefront(graph, upper_bound);
@@ -40,15 +40,15 @@ bool compare_ver(const Graph &graph) {
 }
 
 int main() {
-  std::size_t path_count = 256;
-  std::size_t cycle_count = 256;
-  std::size_t complete_count = 64;
-  std::size_t cubic_count = 45;
+  std::size_t path_count = 0; //1000;
+  std::size_t cycle_count = 0; //256;
+  std::size_t complete_count = 0; //64;
+  std::size_t cubic_count = 0; //45;
 
-  std::size_t random_count = 32;
-  std::size_t random_subcount = 100;
-  double random_min_pct = 0.3;
-  double random_max_pct = 0.9;
+  std::size_t random_count = 64;
+  std::size_t random_subcount = 1; //100;
+  double random_min_pct = 0.5;
+  double random_max_pct = 0.5;
   double random_delta_pct = 0.1;
 
   for (std::size_t a = 1; a < path_count; a++) {
@@ -91,8 +91,8 @@ int main() {
   }
   std::cout << "\nAfter Cubics (Old, New) = " << average_old() << "ms, " << average_new() << "ms\n\n";
   
-  for (std::size_t a = 1; a < random_count; a++) {
-    for (double prob = random_min_pct; prob < random_max_pct; prob += random_delta_pct) {
+  for (std::size_t a = 64; a <= random_count; a++) {
+    for (double prob = random_min_pct; prob <= random_max_pct; prob += random_delta_pct) {
       std::vector<Graph> graphs = Graph::generate_random(a, random_subcount, prob);    
 
       for (const Graph &graph : graphs) {
