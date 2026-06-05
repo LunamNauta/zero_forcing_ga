@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
       else if (solver.since_better_score() == 0) std::cout << "Gen " << generation << ": Better Score -> " << solver.best_score() << "\n";
       // else std::cout << "Gen " << generation << "\n";
       
-      if (current_variance < 0.1 || solver.since_better_score() > generations_before_quit) {
+      if (current_variance < 0.5 / population_size || solver.since_better_score() > generations_before_quit) {
         std::cout << "Gen " << generation << ": Terminating early. Variance: " << current_variance 
                   << ", Gens since better score: " << solver.since_better_score() << "\n";
         break;
@@ -116,7 +116,7 @@ int main(int argc, char* argv[]) {
         generation_found = generation;
         max_generation = std::max(max_generation, generation);
       }
-      else if (solver.since_better_score() == 0) std::cout << "Gen " << generation << ": Better Score -> " << solver.since_better_score() << "\n";
+      else if (solver.since_better_score() == 0) std::cout << "Gen " << generation << ": Better Score -> " << solver.best_score() << "\n";
       else std::cout << "Gen " << generation << "\n";
     }
     std::cout << "Expected answer took " << generation_found << " generation(s)" << "\n";

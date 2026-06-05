@@ -28,7 +28,7 @@ GeneticSolver::GeneticSolver(const Graph *gi, std::size_t psi) :
   _best_ind(gi)
 {
   initialize_population();
-  fix_population();
+  // fix_population();
   reduce_population();
 
   std::sort(population.begin(), population.end(), [](Individual &a, Individual &b) {
@@ -143,7 +143,7 @@ void GeneticSolver::reduce_individual(Individual &ind) {
     forced = current;
     zero_forcing_closure(*graph, forced);
     if (forced.count() == graph->get_order()) continue;
-    acknowledge_fort(~forced);
+    known_forts.insert(~forced);
 
     current.set(u);
   }
@@ -153,8 +153,8 @@ void GeneticSolver::reduce_individual(Individual &ind) {
 
 // Selection Functions ----------------------------------------------------------------
 std::pair<Individual&, Individual&> GeneticSolver::select_parents() {
-  const std::size_t tournament_size = std::sqrt(population.size());
-  std::uniform_int_distribution<std::size_t> dist(0, population.size() - 1);
+  const std::size_t tournament_size = 3; //std::sqrt(population.size());
+  std::uniform_int_distribution<std::size_t> dist(0, population.size() / 2);
 
   Individual *parent1 = &population[dist(gen)];
   Individual *parent2 = &population[dist(gen)];
@@ -210,8 +210,14 @@ VertexBitset GeneticSolver::reduced_fort(const VertexBitset &fort) {
 
 // Running ----------------------------------------------------------------
 void GeneticSolver::run(std::size_t generations) {
+  std::uniform_int_distribution<std::size_t> dist_v;
+
   for (std::size_t a = 0; a < generations; a++) {
+    known_forts.clear();
     crossover_population();
+    for (const VertexBitset &fort : known_forts) {
+      acknowledge_fort(fort);
+    }
     
     std::sort(population.begin(), population.end(), [](Individual &a, Individual &b) {
       bool a_forces = a.forces();

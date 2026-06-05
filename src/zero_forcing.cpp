@@ -5,31 +5,53 @@
 
 #include "graph.hpp"
 
-std::size_t zero_forcing_closure(const Graph &graph, VertexBitset &filled) {
-  VertexBitset next(graph.get_order());
-  std::size_t pt;
+#include <vector>
+#include <limits>
 
-  for (pt = 0; pt < graph.get_order(); pt++){
-    next.reset();
+std::size_t zero_forcing_closure(const Graph &graph, VertexBitset &closure) {
+  std::vector<std::size_t> uncolored_degree(graph.get_order(), 0);
 
-    for (Vertex u = 0; u < graph.get_order(); u++) {
-      if (!filled.test(u)) continue;
-      std::size_t white_count = 0;
-      Vertex forced_vertex;
+  std::vector<Vertex> current_ready; 
+  std::vector<Vertex> next_ready;
+  current_ready.reserve(graph.get_order());
+  next_ready.reserve(graph.get_order());
 
-      for (Vertex v : graph.get_adjacent(u)) {
-        if (filled.test(v)) continue;
-        if (++white_count > 1) break;
-        forced_vertex = v;
-      }
-      if (white_count == 1) next.set(forced_vertex);
-    }
-    if (next.count() == 0) break;
-    
-    filled |= next;
+  for (Vertex u = 0; u < graph.get_order(); u++) {
+    for (Vertex neighbor : graph.get_neighbors(u)) uncolored_degree[u] += !closure.test(neighbor);
+    if (closure.test(u) && uncolored_degree[u] == 1) current_ready.push_back(u);
   }
 
-  if (filled.count() != graph.get_order()) return std::numeric_limits<std::size_t>::max();
+  std::size_t pt = 0;
+  while (!current_ready.empty()) {
+    while (!current_ready.empty()) {
+      Vertex u = current_ready.back();
+      current_ready.pop_back();
+      if (uncolored_degree[u] != 1) continue;
+
+      Vertex v = graph.get_order(); 
+      for (Vertex vi : graph.get_neighbors(u)) {
+        if (closure.test(vi)) continue;
+        v = vi;
+        break;
+      }
+      if (v == graph.get_order()) continue; 
+
+      closure.set(v);
+      for (Vertex w : graph.get_neighbors(v)) {
+        uncolored_degree[w]--;      
+        if (closure.test(w) && uncolored_degree[w] == 1) next_ready.push_back(w);
+      }
+          
+      if (uncolored_degree[v] == 1) next_ready.push_back(v);
+    }
+
+    pt++;
+    
+    current_ready = std::move(next_ready);
+    next_ready.clear();
+  }
+
+  if (closure.count() != graph.get_order()) return std::numeric_limits<std::size_t>::max();
   return pt;
 }
 

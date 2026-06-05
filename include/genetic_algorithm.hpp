@@ -48,9 +48,9 @@ struct Individual {
     if (dirty) update();
 
     double size_bonus = graph->get_order() - initial.count();
-    // double force_penalty = graph->get_order() - closure.count();
-    // double pt_bonus = 1.0 - (static_cast<double>(pt) / graph->get_order());
-    return size_bonus; // - force_penalty + pt_bonus;
+    double force_penalty = graph->get_order() - closure.count();
+    double pt_bonus = 1.0 - (static_cast<double>(pt) / graph->get_order());
+    return size_bonus - force_penalty + pt_bonus;
   }
   std::size_t get_z() {
     return initial.count();
@@ -83,6 +83,8 @@ private:
   double _best_score;
   std::size_t _best_z;
   Individual _best_ind;
+
+  std::unordered_set<VertexBitset> known_forts;
 
   // Initialization ----------------------------------------------------------------
   void initialize_population();
