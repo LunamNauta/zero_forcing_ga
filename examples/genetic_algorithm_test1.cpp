@@ -78,10 +78,10 @@ int main(int argc, char* argv[]) {
       else if (solver.since_better_score() == 0) std::cout << "Gen " << generation << ": Better Score -> " << solver.best_score() << "\n";
       // else std::cout << "Gen " << generation << "\n";
       
+      std::cout << best_variance << "\n";
+
       if (current_variance < 1.0 / order || solver.since_better_variance() > generations_before_quit) {
         if (!irradiated) {
-          std::cout << "Irradiating population and trying again.\n";
-          solver.irradiate_population();
           best_variance = solver.variance();
           irradiated = true;
         }

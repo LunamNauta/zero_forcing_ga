@@ -1,6 +1,8 @@
 #ifndef FORT_COVER_HEADER
 #define FORT_COVER_HEADER
 
+#include <mutex>
+
 #include "gurobi_c++.h"
 
 #include "graph.hpp"

@@ -54,11 +54,13 @@ void test_graph_suite(const std::string& suite_name, const std::vector<Graph>& g
 
 int main(int argc, char* argv[]) {
     std::vector<Graph> paths, cycles, completes, cubics;
-    for (std::size_t a = 2; a <= 64; a++) {
+    for (std::size_t a = 2; a <= 32; a++) {
         paths.push_back(Graph::generate_path(a));
         if (a >= 3) cycles.push_back(Graph::generate_cycle(a));
+    }
+    for (std::size_t a = 3; a < 48; a++) {
         if (a >= 3) completes.push_back(Graph::generate_complete(a));
-        if (a >= 4 && a % 2 == 0) cubics.push_back(Graph::generate_cubic(a));
+        // if (a >= 4 && a % 2 == 0) cubics.push_back(Graph::generate_cubic(a));
     }
 
     test_graph_suite("Paths", paths,10, 10);

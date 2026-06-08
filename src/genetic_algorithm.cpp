@@ -305,6 +305,7 @@ void GeneticSolver::run(std::size_t generations) {
   for (std::size_t a = 0; a < generations; a++) {
     std::unique_lock<std::shared_mutex> lock(_mutex);
     if (dead) break;
+
     known_forts.clear();
     crossover_population();
     for (const VertexBitset &fort : known_forts) {
@@ -362,7 +363,6 @@ void GeneticSolver::run(std::size_t generations) {
     else _since_better_variance++;
 
     if (_best_variance < 0.05 || _since_better_variance > 100) {
-      // std::cout << "Irradiating population and continuing.\n";
       irradiate_population_unthreaded();
     }
   }

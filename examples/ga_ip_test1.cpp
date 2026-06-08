@@ -5,7 +5,7 @@
 #include "fort_cover.hpp"
 
 int main() {
-  Graph graph = Graph::generate_random(20, 1, 0.5).front();
+  Graph graph = Graph::generate_random(64, 1, 0.5).front();
 
   FortCoverData fc_data;
   FortCoverSolver fc(&graph, 1, 3600);
