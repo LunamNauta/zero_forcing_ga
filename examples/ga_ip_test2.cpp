@@ -8,7 +8,6 @@
 
 #include "genetic_algorithm.hpp"
 #include "graph.hpp"
-#include "zero_forcing.hpp"
 
 struct SuiteResults {
     double accuracy;

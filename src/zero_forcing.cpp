@@ -1,12 +1,13 @@
 #include "zero_forcing.hpp"
 
 #include <limits>
+#include <vector>
+#include <limits>
 #include <list>
 
 #include "graph.hpp"
 
-#include <vector>
-#include <limits>
+#include "gurobi_c++.h"
 
 std::size_t zero_forcing_closure(const Graph &graph, VertexBitset &closure) {
   std::vector<std::size_t> uncolored_degree(graph.get_order(), 0);
@@ -152,55 +153,147 @@ std::size_t zero_forcing_wavefront(const Graph &graph, std::size_t upper_bound) 
 std::size_t zero_forcing_wavefront_old(const Graph &graph) {
   if (graph.get_order() == 0) return 0;
 
-	std::list<std::pair<VertexSet, std::size_t>> cl_pairs;
-	cl_pairs.push_back(std::pair<VertexSet, std::size_t>({}, 0));
+  std::list<std::pair<VertexSet, std::size_t>> cl_pairs;
+  cl_pairs.push_back(std::pair<VertexSet, std::size_t>({}, 0));
 
-	for (std::size_t R = 1; R <= graph.get_order(); R++) {
-		for (auto j = cl_pairs.cbegin(); j != cl_pairs.cend(); j++) {
-			const VertexSet &S = j->first;
-			std::size_t r = j->second;
+  for (std::size_t R = 1; R <= graph.get_order(); R++) {
+    for (auto j = cl_pairs.cbegin(); j != cl_pairs.cend(); j++) {
+      const VertexSet &S = j->first;
+      std::size_t r = j->second;
 
-			for (Vertex v = 0; v < graph.get_order(); v++) {
-				VertexSet S_new(S.cbegin(), S.cend());
+      for (Vertex v = 0; v < graph.get_order(); v++) {
+        VertexSet S_new(S.cbegin(), S.cend());
 
-				S_new.insert(v);
+        S_new.insert(v);
 
-				VertexSet neighbors = graph.get_adjacent(v);
-				S_new.insert(neighbors.cbegin(), neighbors.cend());
+        VertexSet neighbors = graph.get_adjacent(v);
+        S_new.insert(neighbors.cbegin(), neighbors.cend());
 
-				zero_forcing_closure(graph,S_new);
+        zero_forcing_closure(graph,S_new);
 
-				std::size_t r_new = r;
-				if (S.find(v) == S.cend()) r_new++;
+        std::size_t r_new = r;
+        if (S.find(v) == S.cend()) r_new++;
 
-				std::size_t neighbors_outside_S = 0;
-				for (VertexSet::const_iterator it = neighbors.cbegin(); it != neighbors.cend(); it++) {
-					if (S.find(*it) != S.cend()) continue;
+        std::size_t neighbors_outside_S = 0;
+        for (VertexSet::const_iterator it = neighbors.cbegin(); it != neighbors.cend(); it++) {
+          if (S.find(*it) != S.cend()) continue;
 
-					neighbors_outside_S++;
-				}
+          neighbors_outside_S++;
+        }
 
-				if (neighbors_outside_S > 1) r_new += (neighbors_outside_S - 1);
+        if (neighbors_outside_S > 1) r_new += (neighbors_outside_S - 1);
 
-				if (r_new <= R) {
-					bool already_present = false;
+        if (r_new <= R) {
+          bool already_present = false;
 
-					for (auto it = cl_pairs.cbegin(); it != cl_pairs.cend(); it++) {
-						if (it->first != S_new || it->second > r_new) continue;
+          for (auto it = cl_pairs.cbegin(); it != cl_pairs.cend(); it++) {
+            if (it->first != S_new || it->second > r_new) continue;
 
-						already_present = true;
-						break;
-					}
+            already_present = true;
+            break;
+          }
 
-					if (!already_present) {
-						cl_pairs.push_back(std::pair<VertexSet, int>(S_new, r_new));
+          if (!already_present) {
+            cl_pairs.push_back(std::pair<VertexSet, int>(S_new, r_new));
 
-						if (S_new.size() == graph.get_order()) return r_new;
-					}
-				}
-			}
-		}
-	}
+            if (S_new.size() == graph.get_order()) return r_new;
+          }
+        }
+      }
+    }
+  }
 
-	return graph.get_order();
+  return graph.get_order();
+}
+
+static GRBEnv& get_gurobi_base_env() {
+  static GRBEnv env([]() {
+    GRBEnv empty_env(true); // Create empty environment
+    empty_env.set(GRB_IntParam_OutputFlag, 0);
+    empty_env.set(GRB_IntParam_LogToConsole, 0);
+    empty_env.set(GRB_DoubleParam_Heuristics, 0);
+    empty_env.set(GRB_IntParam_Threads, 0);
+    empty_env.set(GRB_IntParam_Cuts, 0);
+    // empty_env.set(GRB_IntParam_Presolve, 0);
+    empty_env.start();
+    return empty_env;
+  }());
+  return env;
+}
+VertexBitset minimum_fort_ip_subgraph(const Graph &graph, const VertexBitset &filled) {
+  VertexBitset closure(filled);
+  std::size_t pt = zero_forcing_closure(graph, closure);
+
+  VertexSet vertices;
+  for (Vertex u = 0; u < graph.get_order(); u++) {
+    if (closure.test(u)) continue;
+    vertices.insert(u);
+    for (Vertex v : graph.get_neighbors(u)) {
+      if (!closure.test(v)) continue;
+      vertices.insert(v);
+    }
+  }
+
+  Graph induced = graph.subgraph(vertices);
+  std::size_t order = induced.get_order();
+
+  // Fetch the globally unique environment
+  GRBEnv &env = get_gurobi_base_env();
+  GRBModel model(env);
+  model.set(GRB_IntAttr_ModelSense, GRB_MINIMIZE);
+
+  std::vector<GRBVar> x;
+  x.reserve(order);
+  for (Vertex u = 0; u < order; u++) {
+    double ub = closure.test(induced.get_label(u)) ? 0.0 : 1.0;
+    x.push_back(model.addVar(0.0, ub, 1.0, GRB_BINARY));
+  }
+
+  GRBLinExpr expr;
+  std::vector<double> ones(order, 1.0);
+  expr.addTerms(ones.data(), x.data(), order);
+  model.addConstr(expr, GRB_GREATER_EQUAL, 1.0);
+
+  std::vector<double> coeffs;
+  std::vector<GRBVar> vars;
+  coeffs.reserve(order + 2);
+  vars.reserve(order + 2);
+
+  for (Vertex u = 0; u < order; u++) {
+    for (Vertex v : induced.get_neighbors(u)) {
+      coeffs.clear(); 
+      vars.clear();
+
+      // Add x[v]
+      coeffs.push_back(1.0); 
+      vars.push_back(x[v]);
+
+      // Add -2 * x[u]
+      coeffs.push_back(-2.0); 
+      vars.push_back(x[u]);
+
+      // Add sum(x[w])
+      for (Vertex w : induced.get_neighbors(v)) {
+        coeffs.push_back(1.0); 
+        vars.push_back(x[w]);
+      }
+
+      expr.clear();
+      expr.addTerms(coeffs.data(), vars.data(), coeffs.size());
+      model.addConstr(expr, GRB_GREATER_EQUAL, 0.0);
+    }
+  }
+
+  model.optimize();
+
+  VertexBitset sol(graph.get_order());
+  if (model.get(GRB_IntAttr_Status) == GRB_OPTIMAL) {
+    for (Vertex u = 0; u < order; u++) {
+      if (x[u].get(GRB_DoubleAttr_X) > 0.5) {
+        sol.set(induced.get_label(u));
+      }
+    }
+  }
+
+  return sol;
 }

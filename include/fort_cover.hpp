@@ -88,6 +88,7 @@ public:
 
   VertexBitset best_incumbent() const;
   void force_incumbent(const VertexBitset& solution);
+  void force_lower_bound(double lower_bound);
 
   void run(FortCoverData& data);
 

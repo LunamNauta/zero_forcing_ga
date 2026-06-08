@@ -186,6 +186,7 @@ void GeneticSolver::acknowledge_fort(const VertexBitset &fort, bool reduce) {
 }
 
 VertexBitset GeneticSolver::reduced_fort(const VertexBitset &fort) {
+  /*
   std::vector<Vertex> vertices(graph->get_order());
   std::iota(vertices.begin(), vertices.end(), 0);
   std::shuffle(vertices.begin(), vertices.end(), gen);
@@ -209,6 +210,8 @@ VertexBitset GeneticSolver::reduced_fort(const VertexBitset &fort) {
   }
 
   return ~closure;
+  */
+  return minimum_fort_ip_subgraph(*graph, ~fort);
 }
 
 void GeneticSolver::irradiate_population_unthreaded() {
@@ -363,7 +366,7 @@ void GeneticSolver::run(std::size_t generations) {
     else _since_better_variance++;
 
     if (_best_variance < 0.05 || _since_better_variance > 100) {
-      irradiate_population_unthreaded();
+      // irradiate_population_unthreaded();
     }
   }
 

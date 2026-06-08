@@ -5,6 +5,7 @@
 #include <limits>
 #include <memory>
 #include <cmath>
+#include <unistd.h>
 
 #include "gurobi_c++.h"
 
@@ -62,6 +63,7 @@ void violated_fort_testing_v1::callback() {
 
     {
       std::lock_guard<std::mutex> lock(fc_solver->_update_mutex);
+      usleep(10);
       
       if (fc_solver->_has_new_incumbent) {
         inc_data = fc_solver->_pending_incumbent;
