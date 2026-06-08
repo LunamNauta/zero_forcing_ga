@@ -59,6 +59,7 @@ int main(int argc, char* argv[]) {
 
     generation = 0;
     generation_found = 0;
+    bool irradiated = false;
     while (true) {
       solver.run(1);
       generation++;
@@ -77,10 +78,17 @@ int main(int argc, char* argv[]) {
       else if (solver.since_better_score() == 0) std::cout << "Gen " << generation << ": Better Score -> " << solver.best_score() << "\n";
       // else std::cout << "Gen " << generation << "\n";
       
-      if (current_variance < 0.5 / population_size || solver.since_better_score() > generations_before_quit) {
-        std::cout << "Gen " << generation << ": Terminating early. Variance: " << current_variance 
-                  << ", Gens since better score: " << solver.since_better_score() << "\n";
-        break;
+      if (current_variance < 1.0 / order || solver.since_better_variance() > generations_before_quit) {
+        if (!irradiated) {
+          std::cout << "Irradiating population and trying again.\n";
+          solver.irradiate_population();
+          best_variance = solver.variance();
+          irradiated = true;
+        }
+        else {
+          std::cout << "Gen " << generation << ": Terminating early. Variance: " << current_variance << ", Gens since better score: " << solver.since_better_score() << "\n";
+          break;
+        }
       }
     }
 

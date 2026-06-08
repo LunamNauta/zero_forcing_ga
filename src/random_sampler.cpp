@@ -8,10 +8,6 @@ RandomSampler::RandomSampler(const Graph *gi) :
   gen(std::random_device{}())
 {}
 
-double RandomSampler::get_weight(Vertex u) const {
-  return RS_EPSILON + static_cast<double>(cv[u]) / nf;
-}
-
 double RandomSampler::sum_weights(const VertexBitset &ignored) const {
   double sum = 0;
   for (Vertex u = 0; u < graph->get_order(); u++){
@@ -28,6 +24,15 @@ double RandomSampler::sum_weights(const VertexSet &ignored) const {
     sum += get_weight(u);
   }
   return sum;
+}
+
+double RandomSampler::get_weight(Vertex u) const {
+  return RS_EPSILON + static_cast<double>(cv[u]) / nf;
+}
+
+void RandomSampler::reset_weights() {
+  for (std::size_t &c : cv) c = 0;
+  nf = 0;
 }
 
 void RandomSampler::update_weights(const VertexBitset &fort) {

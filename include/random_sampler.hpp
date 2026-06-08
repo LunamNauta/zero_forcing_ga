@@ -15,13 +15,15 @@ private:
   std::size_t nf;
   std::mt19937 gen;
 
-  double get_weight(Vertex u) const;
-
   double sum_weights(const VertexSet &ignored) const;
   double sum_weights(const VertexBitset &ignored) const;
 
 public:
   RandomSampler(const Graph *gi);
+
+  double get_weight(Vertex u) const;
+
+  void reset_weights();
 
   void update_weights(const VertexSet &fort);
   void update_weights(const VertexBitset &fort);
