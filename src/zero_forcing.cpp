@@ -77,7 +77,6 @@ std::size_t zero_forcing_closure(const Graph &graph, VertexSet &filled) {
   return pt;
 }
 
-
 std::size_t zero_forcing_wavefront(const Graph &graph, std::size_t upper_bound) {
   upper_bound = std::min(graph.order(), upper_bound);
 

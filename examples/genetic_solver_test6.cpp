@@ -1,0 +1,238 @@
+#include <iostream>
+#include <fstream>
+#include <chrono>
+#include <vector>
+#include <string>
+#include <iomanip>
+#include <cstdlib>
+
+#include "../include/graph.hpp"
+#include "../include/genetic_solver.hpp"
+#include "zero_forcing.hpp"
+
+// Updated TrialResult to use double for averaged metrics
+struct TrialResult {
+    std::string param_name;
+    double param_value;
+    std::string graph_type;
+    std::size_t order;
+    std::size_t pop_size;
+    double runtime_ms;
+    double gens_to_solution;
+    double time_per_gen_ms;
+    double best_z;
+};
+
+TrialResult run_averaged_trials(const std::string& param_name,
+                                double param_val,
+                                const std::string& graph_type,
+                                std::size_t order,
+                                const std::vector<Graph>& graphs,
+                                std::size_t pop_size) 
+{
+    double sum_runtime = 0;
+    double sum_gens_to_sol = 0; // Renamed to avoid shadowing
+    double sum_time_per_gen = 0;
+    double sum_best_z = 0;
+    std::size_t num_trials = graphs.size();
+
+    std::cout << "[Batch] Param: " << std::left << std::setw(15) << param_name << " = " << std::setw(5) << param_val
+              << " | Graph: " << std::left << std::setw(10) << graph_type << " (N=" << order << ") x" << num_trials
+              << " | Pop: " << std::setw(3) << pop_size << " ... " << std::flush;
+
+    for (const Graph& graph : graphs) {
+        auto start = std::chrono::high_resolution_clock::now();
+        GeneticSolver solver(&graph, pop_size);
+        
+        std::size_t best_z_val = solver.best_z();
+        std::size_t gens_to_sol = 1;
+        std::size_t stable_gens = 0;
+        std::size_t total_gens = 0; // Now safe to use for the inner loop
+        std::size_t patience = 16;
+
+        for (std::size_t g = 1; g <= 1000000000; ++g, total_gens++) {
+            solver.run(1);
+            std::size_t current_z = solver.best_z();
+            
+            if (current_z < best_z_val) {
+                best_z_val = current_z;
+                gens_to_sol = g;
+                stable_gens = 0;
+            } else {
+                stable_gens++;
+            }
+
+            if (stable_gens > patience) break;
+        }
+
+        auto end = std::chrono::high_resolution_clock::now();
+        double duration = std::chrono::duration<double, std::milli>(end - start).count();
+
+        std::size_t exact_z = zero_forcing_wavefront(graph, best_z_val);
+
+        start = std::chrono::high_resolution_clock::now();
+
+        for (std::size_t g = 1; g <= 1000000000; ++g, total_gens++) {
+            solver.run(1);
+            total_gens = g;
+            std::size_t current_z = solver.best_z();
+            
+            if (current_z < best_z_val) {
+                best_z_val = current_z;
+                gens_to_sol = g;
+                stable_gens = 0;
+            } else {
+                stable_gens++;
+            }
+
+            if (current_z == exact_z) break;
+        }
+
+        end = std::chrono::high_resolution_clock::now();
+        duration += std::chrono::duration<double, std::milli>(end - start).count();
+        double time_per_gen = duration / static_cast<double>(total_gens > 0 ? total_gens : 1);
+
+        sum_runtime += duration;
+        sum_gens_to_sol += gens_to_sol; // Accumulating correctly now
+        sum_time_per_gen += time_per_gen;
+        sum_best_z += best_z_val;
+    }
+
+    double avg_runtime = sum_runtime / num_trials;
+    double avg_gens = sum_gens_to_sol / num_trials;
+    double avg_time_per_gen = sum_time_per_gen / num_trials;
+    double avg_best_z = sum_best_z / num_trials;
+
+    std::cout << "DONE in ~" << std::right << std::fixed << std::setprecision(2) << std::setw(6) << avg_runtime << " ms/run"
+              << " | Avg Gens: " << std::setw(5) << std::setprecision(1) << avg_gens
+              << " | Avg Time/Gen: " << std::setprecision(4) << avg_time_per_gen << " ms\n";
+
+    return {param_name, param_val, graph_type, order, pop_size, avg_runtime, avg_gens, avg_time_per_gen, avg_best_z};
+}
+
+void generate_python_plotter() {
+    std::ofstream py("plot_results.py");
+    py << "import pandas as pd\n";
+    py << "import matplotlib.pyplot as plt\n\n";
+    py << "df = pd.read_csv('benchmark_parameter_results.csv')\n\n";
+    
+    py << "fig, axs = plt.subplots(2, 2, figsize=(16, 12))\n";
+    py << "fig.suptitle('Genetic Solver Performance Analysis (Averaged Trials)', fontsize=16, fontweight='bold')\n\n";
+    
+    py << "# 1. Generations vs Order\n";
+    py << "for g_type, group in df[df['param_name'] == 'Graph_Order'].groupby('graph_type'):\n";
+    py << "    axs[0, 0].plot(group['param_value'], group['gens_to_solution'], marker='o', linewidth=2, label=g_type)\n";
+    py << "axs[0, 0].set_title('Graph Order (N) vs Avg Generations to Solution (Pop=10)')\n";
+    py << "axs[0, 0].set_xlabel('Graph Order (N)')\n";
+    py << "axs[0, 0].set_ylabel('Avg Generations')\n";
+    py << "axs[0, 0].legend()\n";
+    py << "axs[0, 0].grid(True, linestyle='--', alpha=0.7)\n\n";
+
+    py << "# 2. Time per Generation vs Order\n";
+    py << "for g_type, group in df[df['param_name'] == 'Graph_Order'].groupby('graph_type'):\n";
+    py << "    axs[0, 1].plot(group['param_value'], group['time_per_gen_ms'], marker='^', linewidth=2, label=g_type)\n";
+    py << "axs[0, 1].set_title('Graph Order (N) vs Avg Time per Generation (Pop=10)')\n";
+    py << "axs[0, 1].set_xlabel('Graph Order (N)')\n";
+    py << "axs[0, 1].set_ylabel('Time per Generation (ms)')\n";
+    py << "axs[0, 1].legend()\n";
+    py << "axs[0, 1].grid(True, linestyle='--', alpha=0.7)\n\n";
+
+    py << "pop_df = df[df['param_name'] == 'Population_Size']\n\n";
+
+    py << "# 3. Generations vs Population Size\n";
+    py << "axs[1, 0].plot(pop_df['param_value'], pop_df['gens_to_solution'], marker='s', color='green', linewidth=2, label='Random Graph (N=30)')\n";
+    py << "axs[1, 0].set_title('Population Size (P) vs Avg Generations to Solution (N=30)')\n";
+    py << "axs[1, 0].set_xlabel('Population Size (P)')\n";
+    py << "axs[1, 0].set_ylabel('Avg Generations')\n";
+    py << "axs[1, 0].legend()\n";
+    py << "axs[1, 0].grid(True, linestyle='--', alpha=0.7)\n\n";
+
+    py << "# 4. Time per Generation vs Population Size\n";
+    py << "axs[1, 1].plot(pop_df['param_value'], pop_df['time_per_gen_ms'], marker='d', color='purple', linewidth=2, label='Random Graph (N=30)')\n";
+    py << "axs[1, 1].set_title('Population Size (P) vs Avg Time per Generation (N=30)')\n";
+    py << "axs[1, 1].set_xlabel('Population Size (P)')\n";
+    py << "axs[1, 1].set_ylabel('Time per Generation (ms)')\n";
+    py << "axs[1, 1].legend()\n";
+    py << "axs[1, 1].grid(True, linestyle='--', alpha=0.7)\n\n";
+
+    py << "plt.tight_layout(rect=[0, 0.03, 1, 0.95])\n";
+    py << "plt.savefig('comprehensive_analysis.png', dpi=300)\n";
+    py << "plt.close()\n";
+    py << "print('Successfully generated: comprehensive_analysis.png')\n";
+    py.close();
+}
+
+int main() {
+    std::ofstream csv("benchmark_parameter_results.csv");
+    csv << "param_name,param_value,graph_type,order,pop_size,runtime_ms,gens_to_solution,time_per_gen_ms,best_z\n";
+
+    auto log_res = [&](const TrialResult& r) {
+        csv << r.param_name << "," << r.param_value << "," << r.graph_type << ","
+            << r.order << "," << r.pop_size << "," << r.runtime_ms << ","
+            << r.gens_to_solution << "," << r.time_per_gen_ms << "," << r.best_z << "\n";
+    };
+
+    std::cout << "====================================================================\n";
+    std::cout << "     GENETIC SOLVER PARAMETER SWEEP & AUTO-GRAPHING GENERATOR       \n";
+    std::cout << "====================================================================\n\n";
+
+    std::size_t TRIALS_PER_DATAPOINT = 10; // Number of graphs/runs averaged into a single data point
+    std::size_t default_pop = 10;
+
+    // Experiment 1: Sweeping Order (N). 
+    std::cout << "--- Stage 1: Sweeping Graph Order (N) ---\n";
+    std::vector<std::size_t> orders;
+    for (std::size_t a = 8; a <= 100; a += 4) orders.push_back(a);
+
+    for (std::size_t N : orders) {
+        // Create sets of identical graphs for deterministic types to average out GA randomness
+        std::vector<Graph> paths(TRIALS_PER_DATAPOINT, GraphGenerator::path(N));
+        std::vector<Graph> cycles(TRIALS_PER_DATAPOINT, GraphGenerator::cycle(N));
+        std::vector<Graph> completes(TRIALS_PER_DATAPOINT, GraphGenerator::complete(N));
+        std::vector<Graph> randoms;
+
+        for (double a = 0.7; a < 1.0; a += 0.1){
+          std::vector<Graph> graphs = GraphGenerator::random(N, TRIALS_PER_DATAPOINT, a);
+          randoms.insert(randoms.end(), graphs.begin(), graphs.end());
+        }
+
+        log_res(run_averaged_trials("Graph_Order", N, "Path", N, paths, default_pop));
+        log_res(run_averaged_trials("Graph_Order", N, "Cycle", N, cycles, default_pop));
+        log_res(run_averaged_trials("Graph_Order", N, "Complete", N, completes, default_pop));
+        log_res(run_averaged_trials("Graph_Order", N, "Random", N, randoms, default_pop));
+    }
+
+    // Experiment 2: Sweeping Population Size (P). 
+    std::cout << "\n--- Stage 2: Sweeping Population Size (P) ---\n";
+    std::vector<std::size_t> pop_sizes;
+    for (std::size_t a = 8; a <= 128; a += 4) pop_sizes.push_back(a);
+
+    std::size_t fixed_order = 30;
+    
+    // We create a fixed set of random graphs and run EVERY population size against the exact same set
+    std::vector<Graph> fixed_rand_graphs;
+    for (double a = 0.7; a < 1.0; a += 0.1){
+        std::vector<Graph> graphs = GraphGenerator::random(fixed_order, TRIALS_PER_DATAPOINT, a);
+        fixed_rand_graphs.insert(fixed_rand_graphs.end(), graphs.begin(), graphs.end());
+    }
+
+    for (std::size_t P : pop_sizes) {
+        log_res(run_averaged_trials("Population_Size", P, "Random", fixed_order, fixed_rand_graphs, P));
+    }
+
+    csv.close();
+    std::cout << "\nBenchmark data saved to 'benchmark_parameter_results.csv'.\n";
+    
+    generate_python_plotter();
+    std::cout << "Executing Python plotting script...\n";
+    int ret = std::system("python3 plot_results.py");
+    
+    if (ret == 0) {
+        std::cout << "Graph generated successfully: 'comprehensive_analysis.png'.\n";
+    } else {
+        std::cout << "Note: Python execution encountered an issue. Run 'python3 plot_results.py' manually.\n";
+    }
+    std::cout << "====================================================================\n";
+
+    return 0;
+}
