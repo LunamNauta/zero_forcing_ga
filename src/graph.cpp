@@ -1,12 +1,7 @@
-#include "graph.hpp"
+#include "../include/graph.hpp"
 
-#include <unordered_map>
 #include <algorithm>
-#include <iostream>
-#include <fstream>
 #include <numeric>
-#include <cassert>
-#include <sstream>
 #include <random>
 #include <queue>
 
@@ -82,8 +77,8 @@ void _parse_sparse6_data(std::size_t order, std::size_t count, const char *edges
 }
 
 Vertex _bfs_farthest(const Graph &graph, Vertex start, std::size_t &max_dist) {
-  std::vector<bool> visited(graph.get_order(), false);
-  std::vector<std::size_t> dist(graph.get_order(), 0);
+  std::vector<bool> visited(graph.order(), false);
+  std::vector<std::size_t> dist(graph.order(), 0);
 
   std::queue<std::size_t> queue;
 	queue.push(start);
@@ -101,7 +96,7 @@ Vertex _bfs_farthest(const Graph &graph, Vertex start, std::size_t &max_dist) {
 			farthest = u;
 		}
 
-    VertexSet neighbors = graph.get_adjacent(u);
+    VertexSet neighbors = graph.adjacent(u);
 		for (VertexSet::const_iterator it_v = neighbors.cbegin(); it_v != neighbors.cend(); it_v++) {
 			Vertex v = *it_v;
 			if (visited[v]) continue;
@@ -114,62 +109,111 @@ Vertex _bfs_farthest(const Graph &graph, Vertex start, std::size_t &max_dist) {
 	return farthest;
 }
 
-// Initialization ----------------------------------------------------------------
-Graph::Graph() : 
-  vert_count(0),
-  edge_count(0)
-{}
-
-Graph::Graph(std::size_t ord, bool label) :
-  vert_count(ord),
-  edge_count(0)
-{ 
-  assert(ord > 0);
-  labels.resize(ord);
+Graph::Graph(std::size_t order, bool label) :
+  _vert_count(order),
+  _edge_count(0)
+{
+  assert(order != 0);
+  labels.resize(order);
   if (label) std::iota(labels.begin(), labels.end(), 0);
-  adj.resize(ord);
+  _adjacent.resize(order);
 }
 
-void Graph::clear() {
-  vert_count = 0;
-  edge_count = 0;
-  labels.resize(0);
-  adj.resize(0);
+void Graph::from_edge_list(const std::ifstream &file) {
+  return from_edge_list(_file_to_string(file));
 }
 
-void Graph::clear(std::size_t ord, bool label) {
-  assert(ord > 0);
-  vert_count = ord;
-  edge_count = 0;
-  labels.resize(ord);
-  if (label) std::iota(labels.begin(), labels.end(), 0);
-  adj.resize(0);
+void Graph::from_edge_list(const std::string &str) {
+  assert(!str.empty());
+
+  std::stringstream ss(str);
+
+  Vertex u;
+  Vertex v;
+  std::size_t ec_tmp;
+  std::size_t vc_tmp;
+
+  if (!(ss >> vc_tmp >> ec_tmp)) return;
+
+  _vert_count = vc_tmp;
+  _edge_count = 0;
+
+  _adjacent.clear();
+  _adjacent.resize(_vert_count);
+
+  labels.clear();
+  labels.resize(_vert_count);
+  std::iota(labels.begin(), labels.end(), 0);
+
+  for (std::size_t a = 0; a < ec_tmp; a++) {
+    if (ss >> u >> v) insert_edge(u, v);
+    else break;
+  }
+}
+
+void Graph::from_sparse6(const std::ifstream &file) {
+  return from_sparse6(_file_to_string(file));
+}
+
+void Graph::from_sparse6(const std::string &str) {
+  assert(!str.empty());
+
+  std::string str_tmp = str.substr(1);
+  for (char &c : str_tmp) c -= 63;
+
+  size_t header_offset = _get_header_offset(str_tmp.data(), _vert_count);
+  const char* data_ptr = str_tmp.data() + header_offset;
+  size_t data_len = str_tmp.size() - header_offset;
+    
+  std::vector<bool> is_new_vertex_bit;
+  std::vector<Vertex> neighbors;
+  _parse_sparse6_data(_vert_count, data_len, data_ptr, is_new_vertex_bit, neighbors);
+
+  _adjacent.clear();
+  _adjacent.resize(_vert_count);
+
+  labels.clear();
+  labels.resize(_vert_count);
+  std::iota(labels.begin(), labels.end(), 0);
+
+  Vertex u = 0;
+  for (size_t a = 0; a < neighbors.size(); a++) {
+    if (is_new_vertex_bit[a]) u++;
+        
+    Vertex v = neighbors[a];
+    if (v >= _vert_count || u >= _vert_count) break;
+
+    if (v > u) u = v;
+    else insert_edge(u, v);
+  }
+}
+
+void Graph::from_graph6(const std::ifstream &file) {
+  return from_graph6(_file_to_string(file));
 }
 
 void Graph::from_graph6(const std::string &str) {
-  if (str.empty()) {
-    clear();
-    return;
-  }
+  assert(!str.empty());
     
   std::string str_tmp(str);
   for (char &c : str_tmp) c -= 63;
 
-  clear();
-  size_t header_offset = _get_header_offset(str_tmp.data(), vert_count);
-    
-  size_t triangle_bits = (vert_count * (vert_count - 1)) / 2;
+  size_t header_offset = _get_header_offset(str_tmp.data(), _vert_count);
+  size_t triangle_bits = (_vert_count * (_vert_count - 1)) / 2;
     
   const char* data_start = str_tmp.data() + header_offset;
   size_t data_char_count = str_tmp.size() - header_offset;
   std::vector<bool> is_edge = _parse_graph6_data(data_start, data_char_count);
 
-  adj.resize(vert_count);
-  labels.resize(vert_count);
+  _adjacent.clear();
+  _adjacent.resize(_vert_count);
+
+  labels.clear();
+  labels.resize(_vert_count);
   std::iota(labels.begin(), labels.end(), 0);
 
   size_t bit_pos = 0;
-  for (Vertex u = 0; u < vert_count; u++) {
+  for (Vertex u = 0; u < _vert_count; u++) {
     for (Vertex v = 0; v < u; v++) {
       if (bit_pos < triangle_bits && bit_pos < is_edge.size() && is_edge[bit_pos]) {
         insert_edge(v, u);
@@ -179,83 +223,38 @@ void Graph::from_graph6(const std::string &str) {
   }
 }
 
-void Graph::from_sparse6(const std::string &str) {
-  if (str.empty() || str[0] != ':') {
-    clear();
-    return;
-  }
-
-  std::string str_tmp = str.substr(1);
-  for (char &c : str_tmp) c -= 63;
-
-  clear();
-  size_t header_offset = _get_header_offset(str_tmp.data(), vert_count);
-    
-  std::vector<Vertex> neighbors;
-  std::vector<bool> is_new_vertex_bit;
-  const char* data_ptr = str_tmp.data() + header_offset;
-  size_t data_len = str_tmp.size() - header_offset;
-    
-  _parse_sparse6_data(vert_count, data_len, data_ptr, is_new_vertex_bit, neighbors);
-
-  adj.resize(vert_count);
-  labels.resize(vert_count);
-  std::iota(labels.begin(), labels.end(), 0);
-
-  Vertex u = 0;
-  for (size_t a = 0; a < neighbors.size(); a++) {
-    if (is_new_vertex_bit[a]) u++;
-        
-    Vertex v = neighbors[a];
-    if (v >= vert_count || u >= vert_count) break;
-
-    if (v > u) u = v;
-    else insert_edge(u, v);
-  }
-}
-
-void Graph::from_edge_list(const std::string &str) {
-  if (str.empty()){
-    clear();
-    return;
-  }
-
-  std::stringstream ss(str);
-
-  Vertex u;
-  Vertex v;
-  std::size_t ec_tmp;
-  std::size_t vc_tmp;
-
-  clear();
-
-  if (!(ss >> vc_tmp >> ec_tmp)) return;
-
-  vert_count = vc_tmp;
-  edge_count = 0;
-  adj.resize(vert_count);
-  labels.resize(vert_count);
-  std::iota(labels.begin(), labels.end(), 0);
-
-  for (std::size_t a = 0; a < ec_tmp; a++) {
-    if (ss >> u >> v) insert_edge(u, v);
-    else break;
-  }
-}
-
-void Graph::from_graph6(const std::ifstream &file) {
-  return from_graph6(_file_to_string(file));
-}
-void Graph::from_sparse6(const std::ifstream &file) {
-  return from_sparse6(_file_to_string(file));
-}
-void Graph::from_edge_list(const std::ifstream &file) {
-  return from_edge_list(_file_to_string(file));
-}
-
-Graph Graph::subgraph(const VertexSet &vertices) const {
-  Graph induced(vertices.size(), false);
+Graph Graph::subgraph(const VertexBitset &vertices) {
   std::unordered_map<Vertex, Vertex> old_to_new;
+  Graph induced(vertices.count(), false);
+
+  std::size_t idx = 0;
+  for (Vertex v = 0; v < _vert_count; v++) {
+    if (!vertices.test(v)) continue;
+    Vertex old_v = v;
+    old_to_new[old_v] = idx;
+    induced.labels[idx] = old_v;
+    idx++;
+  }
+  
+
+  for (Vertex u = 0; u < _vert_count; u++) {
+    Vertex old_u = u;
+    Vertex new_u = old_to_new[old_u];
+
+    for (VertexSet::const_iterator it_v = _adjacent[old_u].cbegin(); it_v != _adjacent[old_u].cend(); it_v++) {
+      Vertex old_v = *it_v;
+      if (!vertices.test(old_v)) continue;
+      Vertex new_v = old_to_new[old_v];
+      if (new_u < new_v) induced.insert_edge(new_u, new_v);
+    }
+  }
+
+  return induced;
+}
+
+Graph Graph::subgraph(const VertexSet &vertices) {
+  std::unordered_map<Vertex, Vertex> old_to_new;
+  Graph induced(vertices.size(), false);
 
   std::size_t idx = 0;
   for (VertexSet::const_iterator it_v = vertices.cbegin(); it_v != vertices.cend(); it_v++) {
@@ -269,7 +268,7 @@ Graph Graph::subgraph(const VertexSet &vertices) const {
     Vertex old_u = *it_u;
     Vertex new_u = old_to_new[old_u];
 
-    for (VertexSet::const_iterator it_v = adj[old_u].cbegin(); it_v != adj[old_u].cend(); it_v++) {
+    for (VertexSet::const_iterator it_v = _adjacent[old_u].cbegin(); it_v != _adjacent[old_u].cend(); it_v++) {
       Vertex old_v = *it_v;
       if (vertices.find(old_v) == vertices.cend()) continue;
       Vertex new_v = old_to_new[old_v];
@@ -280,18 +279,79 @@ Graph Graph::subgraph(const VertexSet &vertices) const {
   return induced;
 }
 
-// Generation ----------------------------------------------------------------
-std::vector<Graph> Graph::generate_random(std::size_t ord, std::size_t count, double edge_prob) {
+VertexBitset Graph::adjacent_bitset(Vertex u) const {
+  VertexBitset adjacent_bs(_vert_count);
+  VertexSet adjacent = _adjacent[u];
+  for (Vertex u : adjacent) {
+    adjacent_bs.set(u);
+  }
+  return adjacent_bs;
+}
+
+const VertexSet& Graph::adjacent(Vertex u) const {
+  return _adjacent[u];
+}
+
+Vertex Graph::label(Vertex u) const {
+  return labels[u];
+}
+
+std::size_t Graph::order() const {
+  return _vert_count;
+}
+
+std::size_t Graph::size() const {
+  return _edge_count;
+}
+
+std::size_t Graph::degree(Vertex u) const {
+  return _adjacent[u].size();
+}
+
+std::size_t Graph::max_degree() const {
+  std::size_t max = degree(0);
+  for (Vertex u = 1; u < _vert_count; u++) {
+    max = std::max(max, degree(u));
+  }
+  return max;
+}
+
+std::size_t Graph::min_degree() const {
+  std::size_t min = degree(0);
+  for (Vertex u = 1; u < _vert_count; u++) {
+    min = std::min(min, degree(u));
+  }
+  return min;
+}
+
+bool Graph::has_edge(Vertex u, Vertex v) const {
+  return _adjacent[u].find(v) != _adjacent[u].end();
+}
+
+void Graph::insert_edge(Vertex u, Vertex v) {
+  if (has_edge(u, v)) return;
+  _adjacent[u].insert(v);
+  _adjacent[v].insert(u);
+  _edge_count++;
+}
+
+void Graph::erase_edge(Vertex u, Vertex v) {
+  if (!has_edge(u, v)) return;
+  _adjacent[u].erase(v);
+  _adjacent[v].erase(u);
+  _edge_count--;
+}
+
+std::vector<Graph> GraphGenerator::random(std::size_t order, std::size_t count, double edge_probability) {
   std::vector<Graph> output;
-  output.reserve(count);
-    
+  std::bernoulli_distribution dist(edge_probability);
   std::mt19937 gen(std::random_device{}());
-  std::bernoulli_distribution dist(edge_prob);
+  output.reserve(count);
 
   for (std::size_t a = 0; a < count; a++) {
-    Graph graph(ord);
-    for (Vertex u = 0; u < ord; u++) {
-      for (Vertex v = u + 1; v < ord; v++) {
+    Graph graph(order);
+    for (Vertex u = 0; u < order; u++) {
+      for (Vertex v = u + 1; v < order; v++) {
         if (dist(gen)) graph.insert_edge(u, v);
       }
     }
@@ -301,199 +361,74 @@ std::vector<Graph> Graph::generate_random(std::size_t ord, std::size_t count, do
   return output;
 }
 
-Graph Graph::generate_path(std::size_t ord) {
-  Graph graph(ord);
-  if (ord < 2) return graph;
-  for (Vertex u = 0; u < ord - 1; u++) {
+std::vector<Graph> GraphGenerator::cubic(std::size_t order, std::size_t count) {
+  assert(order % 2 == 0 && order >= 4);
+  std::mt19937 gen(std::random_device{}());
+
+  std::vector<Graph> output;
+
+  while (output.size() < count) {
+    while (true) {
+      Graph graph(order);
+      std::vector<std::size_t> points;
+      points.reserve(order * 3);
+      for (std::size_t a = 0; a < order; a++) {
+        points.push_back(a);
+        points.push_back(a);
+        points.push_back(a);
+      }
+
+      std::shuffle(points.begin(), points.end(), gen);
+
+      bool valid = true;
+      for (std::size_t a = 0; a < points.size(); a += 2) {
+        Vertex u = points[a];
+        Vertex v = points[a + 1];
+
+        VertexSet neighbors(u);
+        if (u == v || neighbors.find(v) != neighbors.cend()) { 
+          valid = false;
+          break;
+        }
+
+        graph.insert_edge(u, v);
+      }
+
+      if (valid) output.push_back(graph);
+    }
+  }
+
+  return output;
+}
+
+Graph GraphGenerator::path(std::size_t order) {
+  Graph graph(order);
+  for (Vertex u = 0; u < order - 1; u++) {
     graph.insert_edge(u, u + 1);
   }
   return graph;
 }
 
-Graph Graph::generate_cycle(std::size_t ord) {
-  if (ord < 3) return Graph(0);
-  Graph graph = generate_path(ord);
-  graph.insert_edge(ord - 1, 0);
+Graph GraphGenerator::cycle(std::size_t order) {
+  Graph graph = GraphGenerator::path(order);
+  if (order != 1) graph.insert_edge(order - 1, 0);
   return graph;
 }
 
-Graph Graph::generate_complete(std::size_t ord) {
-  Graph graph(ord);
-  for (Vertex u = 0; u < ord; u++) {
-    for (Vertex v = u + 1; v < ord; v++) {
+Graph GraphGenerator::complete(std::size_t order) {
+  Graph graph(order);
+  for (Vertex u = 0; u < order; u++) {
+    for (Vertex v = u + 1; v < order; v++) {
       graph.insert_edge(u, v);
     }
   }
   return graph;
 }
 
-Graph Graph::generate_cubic(std::size_t ord) {
-  if (ord % 2 != 0 || ord < 4) return Graph(0);
+bool GraphTreeInfo::is_forest(const Graph &graph) {
+  std::vector<bool> visited(graph._vert_count, false);
 
-  std::mt19937 gen(std::random_device{}());
-
-  while (true) {
-    Graph graph(ord);
-    std::vector<std::size_t> points;
-    points.reserve(ord * 3);
-    for (std::size_t a = 0; a < ord; a++) {
-      points.push_back(a);
-      points.push_back(a);
-      points.push_back(a);
-    }
-
-    std::shuffle(points.begin(), points.end(), gen);
-
-    bool valid = true;
-    for (std::size_t a = 0; a < points.size(); a += 2) {
-      Vertex u = points[a];
-      Vertex v = points[a + 1];
-
-      VertexSet neighbors(u);
-      if (u == v || neighbors.find(v) != neighbors.cend()) { 
-        valid = false;
-        break;
-      }
-
-      graph.insert_edge(u, v);
-    }
-
-    if (valid) return graph;
-  }
-}
-
-// Element Access ----------------------------------------------------------------
-std::size_t Graph::get_order() const {
-  return get_vertex_count();
-}
-
-std::size_t Graph::get_vertex_count() const {
-  return vert_count;
-}
-
-std::size_t Graph::get_size() const {
-  return edge_count;
-}
-
-std::size_t Graph::get_edge_count() const {
-  return edge_count;
-}
-
-std::size_t Graph::get_degree(Vertex u) const {
-  assert(u < vert_count);
-  return adj[u].size();
-}
-
-std::size_t Graph::get_max_degree() const {
-  if (vert_count == 0) return INVALID_INDEX;
-
-  std::size_t max = get_degree(0);
-  for (Vertex u = 1; u < vert_count; u++) {
-    max = std::max(max, get_degree(u));
-  }
-
-  return max;
-}
-
-Vertex Graph::get_label(Vertex u) const {
-  assert(u < vert_count);
-  return labels[u];
-}
-
-VertexSet Graph::get_neighbors(Vertex u) const {
-  assert(u < vert_count);
-  return adj[u];
-}
-
-VertexSet Graph::get_adjacent(Vertex u) const {
-  assert(u < vert_count);
-  return adj[u];
-}
-
-// Query ----------------------------------------------------------------
-bool Graph::has_edge(Vertex u, Vertex v) {
-  if (u >= vert_count) return false;
-  return adj[u].find(v) != adj[u].cend();
-}
-
-std::vector<Vertex> Graph::get_vertices() const {
-  return labels;
-}
-
-std::vector<Edge> Graph::get_edges() const {
-  std::vector<Edge> edges;
-  edges.reserve(edge_count);
-
-  for (Vertex u = 0; u < adj.size(); u++) {
-    for (Vertex v : adj[u]) {
-      if (u >= v) continue;
-      edges.emplace_back(u, v);
-    }
-  }
-
-  return edges;
-}
-
-// Insertion ----------------------------------------------------------------
-void Graph::insert_edge(Vertex u, Vertex v) {
-  assert(u < vert_count && v < vert_count);
-  if (has_edge(u, v)) return;
-	adj[u].insert(v);
-	adj[v].insert(u);
-  edge_count++;
-}
-
-void Graph::insert_vertex(std::size_t count) {
-  if (count == 0) return;
-  if (vert_count == 0) {
-    clear(count);
-    return;
-  }
-
-  std::size_t max = *std::max_element(labels.begin(), labels.end());
-  labels.reserve(labels.size() + count);
-  adj.resize(adj.size() + count);
-  for (Vertex u = 0; u < count; u++) labels.push_back(++max);
-  vert_count += count;
-}
-
-// Erasure ----------------------------------------------------------------
-void Graph::erase_edge(Vertex u, Vertex v) {
-  assert(u < vert_count && v < vert_count);
-  if (!has_edge(u, v)) return;
-	adj[u].erase(v);
-	adj[v].erase(u);
-	edge_count--;
-}
-
-void Graph::erase_vertex(Vertex u) {
-  assert(u < vert_count);
-
-  for (Vertex neighbor : adj[u]) {
-    adj[neighbor].erase(u);
-  }
-
-  adj.erase(adj.begin() + u);
-  labels.erase(labels.begin() + u);
-  vert_count--;
-
-  for (VertexSet &neighbors : adj) {
-    VertexSet updated_set;
-    for (Vertex neighbor_idx : neighbors) {
-      if (neighbor_idx > u) updated_set.insert(neighbor_idx - 1);
-      else updated_set.insert(neighbor_idx);
-    }
-    neighbors = std::move(updated_set);
-  }
-}
-
-// Tree ----------------------------------------------------------------
-bool Graph::is_valid_forest() const {
-  if (vert_count == 0) return true;
-
-  std::vector<bool> visited(vert_count, false);
-
-  for (std::size_t u = 0; u < vert_count; u++) {
+  for (std::size_t u = 0; u < graph._vert_count; u++) {
     if (visited[u]) continue;
 
     std::vector<std::pair<Vertex, Vertex>> stack;
@@ -504,7 +439,7 @@ bool Graph::is_valid_forest() const {
       auto [curr, parent] = stack.back();
       stack.pop_back();
 
-      for (Vertex neighbor : adj[curr]) {
+      for (Vertex neighbor : graph._adjacent[curr]) {
         if (visited[neighbor]) {
           if (neighbor != parent) return false;
           continue;
@@ -519,43 +454,41 @@ bool Graph::is_valid_forest() const {
   return true;
 }
 
-bool Graph::is_valid_tree() const {
-  if (vert_count == 0) return false;
-  if (edge_count != vert_count - 1) return false;
-  return is_valid_forest();
+bool GraphTreeInfo::is_tree(const Graph &graph) {
+  if (graph._edge_count != graph._vert_count - 1) return false;
+  return GraphTreeInfo::is_forest(graph);
 }
 
-std::size_t Graph::tree_diameter() const {
-  if (vert_count == 0) return 0;
+std::size_t GraphTreeInfo::diameter(const Graph &graph) {
+  if (graph._vert_count == 0) return 0;
 
   std::size_t max_dist = 0;
-	Vertex farthest = _bfs_farthest(*this, 0, max_dist);
+	Vertex farthest = _bfs_farthest(graph, 0, max_dist);
 
 	max_dist = 0;
-	_bfs_farthest(*this, farthest, max_dist);
+	_bfs_farthest(graph, farthest, max_dist);
 
 	return max_dist;
 }
 
-std::pair<Vertex, Vertex> Graph::tree_center() const {
-  if (vert_count == 0) return {INVALID_INDEX, INVALID_INDEX};
-  if (vert_count == 1) return {0, INVALID_INDEX};
-  if (vert_count == 2) return {0, 1};
+std::pair<Vertex, Vertex> GraphTreeInfo::center(const Graph &graph) {
+  if (graph._vert_count == 1) return {0, INVALID_INDEX};
+  if (graph._vert_count == 2) return {0, 1};
 
-  std::vector<std::size_t> degrees(vert_count);
+  std::vector<std::size_t> degrees(graph._vert_count);
   std::vector<Vertex> leaves;
 
-  for (Vertex u = 0; u < vert_count; u++) {
-    degrees[u] = adj[u].size();
+  for (Vertex u = 0; u < graph._vert_count; u++) {
+    degrees[u] = graph._adjacent[u].size();
     if (degrees[u] == 1) leaves.push_back(u);
   }
 
   std::size_t removed_count = leaves.size();
-  while (removed_count < vert_count) {
+  while (removed_count < graph._vert_count) {
     std::vector<Vertex> next_leaves;
         
     for (Vertex leaf : leaves) {
-      for (Vertex neighbor : adj[leaf]) {
+      for (Vertex neighbor : graph._adjacent[leaf]) {
         if (degrees[neighbor] <= 1) continue;
         if (--degrees[neighbor] == 1) next_leaves.push_back(neighbor);
       }
@@ -573,31 +506,10 @@ std::pair<Vertex, Vertex> Graph::tree_center() const {
   return {INVALID_INDEX, INVALID_INDEX};
 }
 
-// Misc ----------------------------------------------------------------
-VertexSet Graph::get_pendants() const {
-  VertexSet pendants;
+bool GraphMiscInfo::is_connected(const Graph &graph) {
+	if (graph._vert_count == 0) return true;
 
-  for (Vertex u = 0; u < adj.size(); u++) {
-    if (adj[u].size() != 1) continue;
-    pendants.insert(u);
-  }
-
-  return pendants; 
-}
-
-VertexSet Graph::get_complement(const VertexSet &verts) const {
-	VertexSet comp;
-	for (Vertex u = 0; u < vert_count; u++){
-		if(verts.find(u) != verts.cend()) continue;
-		comp.insert(u);
-	}
-	return comp;
-}
-
-bool Graph::is_connected() const {
-	if (vert_count == 0) return true;
-
-  std::vector<bool> visited(vert_count, false);
+  std::vector<bool> visited(graph._vert_count, false);
   std::vector<Vertex> stack;
 
   visited[0] = true;
@@ -608,7 +520,7 @@ bool Graph::is_connected() const {
 		Vertex u = stack.back();
 		stack.pop_back();
 
-    for (Vertex v : adj[u]) {
+    for (Vertex v : graph._adjacent[u]) {
       if (visited[v]) continue;
       visited[v] = true;
       stack.push_back(v);
@@ -616,18 +528,41 @@ bool Graph::is_connected() const {
     }
   }
 
-  return count == vert_count;
+  return count == graph._vert_count;
 }
 
-// Output ----------------------------------------------------------------
-std::ostream& operator<<(std::ostream &os, const Graph &graph) {
-  os << "Order: " << graph.vert_count << ", #Edges: " << graph.edge_count << "\n";
-  for (std::size_t u = 0; u < graph.vert_count; u++){
-    os << graph.labels[u] << ": ";
-    for (VertexSet::const_iterator it = graph.adj[u].cbegin(); it != graph.adj[u].cend(); it++) {
-      os << graph.labels[*it] << " ";
-    }
-    os << "\n";
+VertexBitset GraphMiscInfo::pendants_bs(const Graph &graph) {
+  VertexBitset pendants(graph._vert_count);
+  for (Vertex u = 0; u < graph._adjacent.size(); u++) {
+    if (graph._adjacent[u].size() != 1) continue;
+    pendants.set(u);
   }
-  return os;
+  return pendants; 
+}
+
+VertexSet GraphMiscInfo::pendants(const Graph &graph) {
+  VertexSet pendants;
+  for (Vertex u = 0; u < graph._adjacent.size(); u++) {
+    if (graph._adjacent[u].size() != 1) continue;
+    pendants.insert(u);
+  }
+  return pendants; 
+}
+
+VertexBitset GraphMiscInfo::complement_bs(const Graph &graph, const VertexBitset &vertices) {
+	VertexBitset complement(graph._vert_count);
+	for (Vertex u = 0; u < graph._vert_count; u++){
+		if (vertices.test(u)) continue;
+		complement.set(u);
+	}
+	return complement;
+}
+
+VertexSet GraphMiscInfo::complement(const Graph &graph, const VertexSet &vertices) {
+	VertexSet complement;
+	for (Vertex u = 0; u < graph._vert_count; u++){
+		if (vertices.find(u) != vertices.end()) continue;
+		complement.insert(u);
+	}
+	return complement;
 }

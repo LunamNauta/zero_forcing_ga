@@ -1,12 +1,12 @@
-#ifndef GENETIC_ALGORITHM_HEADER
-#define GENETIC_ALGORITHM_HEADER
+#ifndef GENETIC_SOLVER_HEADER
+#define GENETIC_SOLVER_HEADER
 
-#include "fort_cover.hpp"
-#include "random_sampler.hpp"
-#include "graph.hpp"
-#include "zero_forcing.hpp"
-#include <random>
+#include "../include/weighted_sampler.hpp"
+#include "../include/zero_forcing.hpp"
+#include "../include/graph.hpp"
+
 #include <shared_mutex>
+#include <random>
 #include <atomic>
 
 typedef VertexBitset Gene;
@@ -22,8 +22,8 @@ struct Individual {
 
   Individual(const Graph *gi) :
     graph(gi),
-    initial(gi->get_order()),
-    closure(gi->get_order()),
+    initial(gi->order()),
+    closure(gi->order()),
     pt(0),
     dirty(false)
   {
@@ -42,7 +42,7 @@ struct Individual {
 
   void set_initial(const VertexBitset &ii) {
     initial = ii;
-    initial.resize(graph->get_order(), false);
+    initial.resize(graph->order(), false);
     dirty = true;
   }
   VertexBitset get_initial() {
@@ -52,9 +52,9 @@ struct Individual {
   double get_score() {
     if (dirty) update();
 
-    double size_bonus = graph->get_order() - initial.count();
-    double force_penalty = graph->get_order() - closure.count();
-    double pt_bonus = 1.0 - (static_cast<double>(pt) / graph->get_order());
+    double size_bonus = graph->order() - initial.count();
+    double force_penalty = graph->order() - closure.count();
+    double pt_bonus = 1.0 - (static_cast<double>(pt) / graph->order());
     return size_bonus - force_penalty + pt_bonus;
   }
   std::size_t get_z() {
@@ -62,14 +62,12 @@ struct Individual {
   }
   bool forces() {
     if (dirty) update();
-    return closure.count() == graph->get_order();
+    return closure.count() == graph->order();
   }
 };
 
 class GeneticSolver {
 private:
-  mutable std::shared_mutex _mutex;
-  FortCoverSolver *fc_solver;
   const Graph *graph;
   std::vector<Individual> population;
   double min_mutation;
@@ -78,7 +76,7 @@ private:
   double min_elite;
   double max_elite;
   double elite_pct;
-  RandomSampler sampler;
+  WeightedSampler sampler;
   std::mt19937 gen;
 
   std::atomic<std::size_t> _lower_bound;
@@ -121,8 +119,6 @@ private:
 public:
   // Initialization ----------------------------------------------------------------
   GeneticSolver(const Graph *gi, std::size_t psi);
-
-  void set_fc_solver(FortCoverSolver *fc);
 
   // Information Addition ----------------------------------------------------------------
   void force_lower_bound(std::size_t lb);

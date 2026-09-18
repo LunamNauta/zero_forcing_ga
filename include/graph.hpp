@@ -2,97 +2,90 @@
 #define GRAPH_HEADER
 
 #include <unordered_set>
-#include <iosfwd>
+#include <fstream>
 #include <limits>
-#include <vector>
-#include <string>
 
 #include <boost/dynamic_bitset/dynamic_bitset.hpp>
 
 typedef std::size_t Vertex;
+typedef std::pair<Vertex, Vertex> Edge;
 typedef std::unordered_set<Vertex> VertexSet;
 typedef boost::dynamic_bitset<> VertexBitset;
-typedef std::pair<Vertex, Vertex> Edge;
 
-inline constexpr Vertex INVALID_VERTEX = std::numeric_limits<Vertex>::max();
-inline constexpr std::size_t INVALID_INDEX = std::numeric_limits<std::size_t>::max();
+constexpr std::size_t INVALID_INDEX = std::numeric_limits<std::size_t>::max();
+constexpr Vertex INVALID_VERTEX = std::numeric_limits<Vertex>::max();
 
-class Graph { 
+class Graph {
 private:
-  std::size_t vert_count;
-  std::size_t edge_count;
+  std::vector<VertexSet> _adjacent;
   std::vector<Vertex> labels;
-  std::vector<VertexSet> adj;
+  std::size_t _vert_count;
+  std::size_t _edge_count;
 
 public:
-  // Initialization ----------------------------------------------------------------
-  Graph();
-  Graph(std::size_t ord, bool label = true);
+  Graph(std::size_t order, bool label = true);
 
-  void clear();
-  void clear(std::size_t ord, bool label = true);
-
-  void from_graph6(const std::string &str);
-  void from_sparse6(const std::string &str);
+  void from_edge_list(const std::ifstream &file);
   void from_edge_list(const std::string &str);
 
-  void from_graph6(const std::ifstream &file);  
   void from_sparse6(const std::ifstream &file);
-  void from_edge_list(const std::ifstream &file);
+  void from_sparse6(const std::string &str);
 
-  Graph subgraph(const std::unordered_set<Vertex> &vertices) const;
+  void from_graph6(const std::ifstream &file);
+  void from_graph6(const std::string &str);
 
-  static std::vector<Graph> generate_random(std::size_t ord, std::size_t count, double edge_prob);
-  static Graph generate_path(std::size_t ord);
-  static Graph generate_cycle(std::size_t ord);
-  static Graph generate_complete(std::size_t ord);
-  static Graph generate_cubic(std::size_t ord);
+  Graph subgraph(const VertexBitset &vertices);
+  Graph subgraph(const VertexSet &vertices);
 
-  // Element Access ----------------------------------------------------------------
-  std::size_t get_order() const;
-  std::size_t get_vertex_count() const;
+  VertexBitset adjacent_bitset(Vertex u) const;
+  const VertexSet& adjacent(Vertex u) const;
+  Vertex label(Vertex u) const;
+  std::size_t order() const;
+  std::size_t size() const;
 
-  std::size_t get_size() const;
-  std::size_t get_edge_count() const;
+  std::size_t degree(Vertex u) const;
+  std::size_t max_degree() const;
+  std::size_t min_degree() const;
 
-  std::size_t get_degree(Vertex u) const;
-  std::size_t get_max_degree() const;
+  bool has_edge(Vertex u, Vertex v) const;
 
-  Vertex get_label(Vertex u) const;
-
-  VertexSet get_neighbors(Vertex u) const;
-  VertexSet get_adjacent(Vertex u) const;
-
-  bool has_edge(Vertex u, Vertex v);
-
-  std::vector<Vertex> get_vertices() const;
-  std::vector<Edge> get_edges() const;
-
-  // Insertion ----------------------------------------------------------------
   void insert_edge(Vertex u, Vertex v);
-  void insert_vertex(std::size_t count = 1);
 
-  // Erasure ----------------------------------------------------------------
   void erase_edge(Vertex u, Vertex v);
-  void erase_vertex(Vertex u);
 
-  // Tree ----------------------------------------------------------------
-  bool is_valid_forest() const;
-  bool is_valid_tree() const;
+  friend class GraphGenerator;
+  friend class GraphTreeInfo;
+  friend class GraphMiscInfo;
+};
 
-  std::size_t tree_diameter() const;
+class GraphGenerator {
+public:
+  static std::vector<Graph> random(std::size_t order, std::size_t count, double probability);
+  static std::vector<Graph> cubic(std::size_t order, std::size_t count);
+  static Graph path(std::size_t order);
+  static Graph cycle(std::size_t order);
+  static Graph complete(std::size_t order);
+};
 
-  std::pair<Vertex, Vertex> tree_center() const;
+class GraphTreeInfo {
+public:
+  static bool is_forest(const Graph &graph);
+  static bool is_tree(const Graph &graph);
 
-  // Misc ----------------------------------------------------------------
-  VertexSet get_pendants() const;
+  static std::size_t diameter(const Graph &graph);
 
-  VertexSet get_complement(const VertexSet &verts) const;
+  static std::pair<Vertex, Vertex> center(const Graph &graph);
+};
 
-  bool is_connected() const;
+class GraphMiscInfo {
+public:
+  static bool is_connected(const Graph &graph);
 
-  // Output ----------------------------------------------------------------
-  friend std::ostream& operator<<(std::ostream &os, const Graph &graph);
+  static VertexBitset pendants_bs(const Graph &graph);
+  static VertexSet pendants(const Graph &graph);
+
+  static VertexBitset complement_bs(const Graph &graph, const VertexBitset &vertices);
+  static VertexSet complement(const Graph &graph, const VertexSet &vertices);
 };
 
 #endif

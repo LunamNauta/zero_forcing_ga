@@ -1,73 +1,77 @@
-#include "random_sampler.hpp"
-#include "graph.hpp"
+#include "../include/weighted_sampler.hpp"
 
-RandomSampler::RandomSampler(const Graph *gi) :
-  graph(gi),
-  cv(gi->get_order(), 0),
+WeightedSampler::WeightedSampler(const Graph *graph) :
+  graph(graph),
+  cv(graph->order(), 0),
   nf(0),
-  gen(std::random_device{}())
+  generator(std::random_device{}())
 {}
 
-double RandomSampler::sum_weights(const VertexBitset &ignored) const {
-  double sum = 0;
-  for (Vertex u = 0; u < graph->get_order(); u++){
+double WeightedSampler::sum_weights(const VertexBitset &ignored) const {
+  double sum = 0.0;
+  for (Vertex u = 0; u < graph->order(); u++){
     if (ignored[u]) continue;
     sum += get_weight(u);
   }
   return sum;
 }
 
-double RandomSampler::sum_weights(const VertexSet &ignored) const {
-  double sum = 0;
-  for (Vertex u = 0; u < graph->get_order(); u++){
+double WeightedSampler::sum_weights(const VertexSet &ignored) const {
+  double sum = 0.0;
+  for (Vertex u = 0; u < graph->order(); u++){
     if (ignored.find(u) != ignored.cend()) continue;
     sum += get_weight(u);
   }
   return sum;
 }
 
-double RandomSampler::get_weight(Vertex u) const {
+double WeightedSampler::get_weight(Vertex u) const {
   return RS_EPSILON + static_cast<double>(cv[u]) / nf;
 }
 
-void RandomSampler::reset_weights() {
-  for (std::size_t &c : cv) c = 0;
+void WeightedSampler::reset_weights() {
+  for (double &c : cv) {
+    c = 0;
+  }
   nf = 0;
 }
 
-void RandomSampler::update_weights(const VertexBitset &fort) {
-  for (Vertex u = 0; u < graph->get_order(); u++) {
+void WeightedSampler::update_weights(const VertexBitset &fort) {
+  for (Vertex u = 0; u < graph->order(); u++) {
     if (!fort[u]) continue;
-    cv[u]++;
+    cv[u] = RS_ALPHA * cv[u] + 1.0 / fort.count();
   }
   nf++;
 }
 
-void RandomSampler::update_weights(const VertexSet &fort) {
-  for (Vertex u : fort) cv[u]++;
+void WeightedSampler::update_weights(const VertexSet &fort) {
+  for (Vertex u : fort) {
+    cv[u] = RS_ALPHA * cv[u] + 1.0 / fort.size();
+  }
   nf++;
 }
 
-VertexBitset RandomSampler::sample_bitset(std::size_t num_samples, VertexBitset ignored, bool invert) {
-  // Default conditions for empty samples or graph
-  if (num_samples == 0 || graph->get_order() == 0) return VertexBitset(graph->get_order());
+VertexBitset WeightedSampler::sample_bitset(std::size_t num_samples, const VertexBitset &ignored, bool invert) {
+  // Default conditions for empty samples
+  if (num_samples == 0) return VertexBitset(graph->order());
 
   // Bound number of samples
-  num_samples = std::min(num_samples, graph->get_order());
-  ignored.resize(graph->get_order());
+  num_samples = std::min(num_samples, graph->order());
+  VertexBitset ignored_tmp = ignored;
+  ignored_tmp.resize(graph->order());
 
   // Distribution for base of selection weight
-  std::uniform_real_distribution<double> dist(0.0, 1.0);
+  std::uniform_real_distribution<double> distribution(0.0, 1.0);
 
   // Buffer for potential sample vertices (and their weight)
   std::vector<std::pair<Vertex, double>> candidates;  
-  double total_weight = sum_weights(ignored);
+  double total_weight = sum_weights(ignored_tmp);
 
   // Compute weights
-  for (Vertex u = 0; u < graph->get_order(); u++) {
-    if (ignored[u]) continue;
+  for (Vertex u = 0; u < graph->order(); u++) {
+    if (ignored_tmp[u]) continue;
     // Vertex weight is rand^(1/(weight / total_weight))
-    double base = dist(gen);
+    double base = distribution(generator);
     double weight = get_weight(u);
     double ratio = invert ? weight / total_weight : total_weight / weight;
     candidates.emplace_back(u, std::pow(base, ratio));
@@ -79,31 +83,31 @@ VertexBitset RandomSampler::sample_bitset(std::size_t num_samples, VertexBitset 
   });
 
   // Select the top @num_samples candidates for the sample
-  VertexBitset sample(graph->get_order());
+  VertexBitset sample(graph->order());
   for (std::size_t a = 0; a < std::min(candidates.size(), num_samples); a++) {
     sample[candidates[a].first] = true;
   }
   return sample;
 }
 
-VertexSet RandomSampler::sample_set(std::size_t num_samples, const VertexSet &ignored, bool invert) {
+VertexSet WeightedSampler::sample(std::size_t num_samples, const VertexSet &ignored, bool invert) {
   // Default conditions for empty samples or graph
-  if (num_samples == 0 || graph->get_order() == 0) return {};
+  if (num_samples == 0) return {};
 
   // Bound number of samples
-  num_samples = std::min(num_samples, graph->get_order());
+  num_samples = std::min(num_samples, graph->order());
 
   // Distribution for base of selection weight
-  std::uniform_real_distribution<double> dist(0.0, 1.0);
+  std::uniform_real_distribution<double> distribution(0.0, 1.0);
 
   // Buffer for potential sample vertices (and their weight)
   std::vector<std::pair<Vertex, double>> candidates;  
   double total_weight = sum_weights(ignored);
 
-  for (Vertex u = 0; u < graph->get_order(); u++) {
-    if (ignored.find(u) != ignored.cend()) continue;
+  for (Vertex u = 0; u < graph->order(); u++) {
+    if (ignored.find(u) != ignored.end()) continue;
     // Vertex weight is rand^(1/(weight / total_weight))
-    double base = dist(gen);
+    double base = distribution(generator);
     double weight = get_weight(u);
     double ratio = invert ? weight / total_weight : total_weight / weight;
     candidates.emplace_back(u, std::pow(base, ratio));

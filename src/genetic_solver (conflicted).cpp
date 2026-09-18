@@ -1,16 +1,15 @@
-#include "genetic_algorithm.hpp"
+#include "../include/genetic_solver.hpp"
 
-#include <random>
 #include <algorithm>
+#include <random>
 #include <tuple>
-#include <mutex>
 
-#include "zero_forcing.hpp"
-#include "graph.hpp"
+#include "../include/zero_forcing.hpp"
+#include "../include/graph.hpp"
 
 GeneticSolver::GeneticSolver(const Graph *gi, std::size_t psi) :
   graph(gi),
-  population(psi, Individual(gi)),
+  population(psi, Individual(gi, &sampler)),
   min_mutation(0.01),
   max_mutation(0.8),
   mutation_pct(max_mutation),
@@ -19,18 +18,19 @@ GeneticSolver::GeneticSolver(const Graph *gi, std::size_t psi) :
   elite_pct(max_elite),
   sampler(gi),
   gen(std::random_device{}()),
-  _lower_bound(std::min(1UL, gi->get_order())),
-  _upper_bound(gi->get_order()),
+  _lower_bound(std::min(1UL, gi->order())),
+  _upper_bound(gi->order()),
   _since_better_variance(0),
   _since_better_score(0),
   _since_better_z(0),
   _best_variance(0.25),
   _best_score(0),
   _best_z(0),
-  _best_ind(gi),
+  _best_ind(gi, &sampler),
   dead(true)
 {
   initialize_population();
+  fix_population();
   reduce_population();
 
   std::sort(population.begin(), population.end(), [](Individual &a, Individual &b) {
@@ -46,13 +46,8 @@ GeneticSolver::GeneticSolver(const Graph *gi, std::size_t psi) :
   _best_z = _best_ind.get_z();
 }
 
-void GeneticSolver::set_fc_solver(FortCoverSolver *fc) {
-  std::unique_lock<std::shared_mutex> lock(_mutex);
-  fc_solver = fc;
-}
-
 void GeneticSolver::initialize_population() {
-  double step = static_cast<double>(graph->get_order()) / population.size();
+  double step = static_cast<double>(graph->order()) / population.size();
   double order = 1;
   VertexBitset initial;
   
@@ -60,6 +55,9 @@ void GeneticSolver::initialize_population() {
     initial = std::move(sampler.sample_bitset(order));
     population[a].set_initial(initial);
   }
+
+  fix_population();
+  reduce_population();
 }
 
 void GeneticSolver::crossover_population() {
@@ -92,12 +90,12 @@ void GeneticSolver::reduce_population() {
 
 Individual GeneticSolver::crossover_individual(Individual &ind1, Individual &ind2) {
   VertexBitset sample;
-  Individual best_child(graph);
-  Individual child(graph);
+  Individual best_child(graph, &sampler);
+  Individual child(graph, &sampler);
   std::size_t min_order = std::min(ind1.get_z(), ind2.get_z());
 
   VertexBitset sample_space0 = ind1.get_initial() | ind2.get_initial();
-  VertexBitset epsilon = sampler.sample_bitset((graph->get_order() - sample_space0.count())*mutation_pct, sample_space0);
+  VertexBitset epsilon = sampler.sample_bitset((graph->order() - sample_space0.count())*mutation_pct, sample_space0);
   VertexBitset sample_space1 = sample_space0 | epsilon;
 
   best_child.set_initial(sample_space1);
@@ -106,6 +104,8 @@ Individual GeneticSolver::crossover_individual(Individual &ind1, Individual &ind
     child.set_initial(sample);
     if (child.forces() && child.get_score() > best_child.get_score()) best_child = child;
   }
+
+  fix_individual(best_child);
   reduce_individual(best_child);
 
   return best_child;
@@ -118,9 +118,9 @@ void GeneticSolver::fix_individual(Individual &ind) {
   VertexBitset forced = current;
   VertexBitset sample;
 
-  while (forced.count() < graph->get_order()) {
+  while (forced.count() < graph->order()) {
     zero_forcing_closure(*graph, forced);
-    if (forced.count() == graph->get_order()) break;
+    if (forced.count() == graph->order()) break;
     acknowledge_fort(~forced);
 
     sample = std::move(sampler.sample_bitset(1, forced));
@@ -134,7 +134,7 @@ void GeneticSolver::fix_individual(Individual &ind) {
 void GeneticSolver::reduce_individual(Individual &ind) {
   if (!ind.forces()) return;
 
-  std::vector<Vertex> vertices(graph->get_order());
+  std::vector<Vertex> vertices(graph->order());
   std::iota(vertices.begin(), vertices.end(), 0);
   std::shuffle(vertices.begin(), vertices.end(), gen);
 
@@ -147,7 +147,7 @@ void GeneticSolver::reduce_individual(Individual &ind) {
     
     forced = current;
     zero_forcing_closure(*graph, forced);
-    if (forced.count() == graph->get_order()) continue;
+    if (forced.count() == graph->order()) continue;
     known_forts.insert(~forced);
 
     current.set(u);
@@ -157,26 +157,45 @@ void GeneticSolver::reduce_individual(Individual &ind) {
 }
 
 std::pair<Individual&, Individual&> GeneticSolver::select_parents() {
+  std::uniform_int_distribution<std::size_t> distribution(0, population.size() - 1);
   const std::size_t tournament_size = 3;
-  std::uniform_int_distribution<std::size_t> dist(0, population.size() / 2);
 
-  Individual *parent1 = &population[dist(gen)];
-  Individual *parent2 = &population[dist(gen)];
-  Individual *candidate;
+  std::vector<std::pair<Individual*, Individual*>> combos;
+  std::vector<Individual*> parents;
 
-  for (std::size_t a = 0; a < tournament_size; a++) {
-    candidate = &population[dist(gen)];
-    if (candidate->get_score() <= parent1->get_score()) continue;
-    parent1 = candidate;
-  }
-  for (std::size_t a = 0; a < tournament_size; a++) {
-    candidate = &population[dist(gen)];
-    if (candidate->get_score() <= parent2->get_score()) continue;
-    if (candidate == parent1) continue;
-    parent2 = candidate;
+  while (parents.size() != tournament_size) {
+    Individual *parent = &population[distribution(gen)];
+    if (std::find(parents.begin(), parents.end(), parent) != parents.end()) continue;
+    parents.push_back(parent);
   }
 
-  return {*parent1, *parent2};
+  for (std::size_t a = 0; a < tournament_size; a++) {
+    for (std::size_t b = a + 1; b < tournament_size; b++) {
+      combos.emplace_back(parents[a], parents[b]);
+    }
+  }
+
+  std::sort(combos.begin(), combos.end(), [&](std::pair<Individual*, Individual*> combo1, std::pair<Individual*, Individual*> combo2){
+    const double gamma = 1;
+    const double delta = 0.1;
+
+    double score11 = combo1.first->get_score();
+    double score12 = combo1.second->get_score();
+    double and1 = (combo1.first->get_initial() & combo1.second->get_initial()).count();
+    double or1 = (combo1.first->get_initial() | combo1.second->get_initial()).count();
+
+    double score21 = combo2.first->get_score();
+    double score22 = combo2.second->get_score();
+    double and2 = (combo2.first->get_initial() & combo2.second->get_initial()).count();
+    double or2 = (combo2.first->get_initial() | combo2.second->get_initial()).count();
+
+    double score1 = (gamma / population.front().get_score()) * (score11 + score12) + delta * (1 - (and1 / or1));
+    double score2 = (gamma / population.front().get_score()) * (score21 + score22) + delta * (1 - (and2 / or2));
+
+    return score1 > score2;
+  });
+  
+  return {*combos[0].first, *combos[0].second};
 }
 
 void GeneticSolver::acknowledge_fort(const VertexBitset &fort, bool reduce) {
@@ -186,8 +205,7 @@ void GeneticSolver::acknowledge_fort(const VertexBitset &fort, bool reduce) {
 }
 
 VertexBitset GeneticSolver::reduced_fort(const VertexBitset &fort) {
-  /*
-  std::vector<Vertex> vertices(graph->get_order());
+  std::vector<Vertex> vertices(graph->order());
   std::iota(vertices.begin(), vertices.end(), 0);
   std::shuffle(vertices.begin(), vertices.end(), gen);
   
@@ -200,7 +218,7 @@ VertexBitset GeneticSolver::reduced_fort(const VertexBitset &fort) {
 
     forced = closure; 
     zero_forcing_closure(*graph, forced);
-    if (forced.count() == graph->get_order()) {
+    if (forced.count() == graph->order()) {
       closure.reset(u);
       continue;
     }
@@ -210,8 +228,7 @@ VertexBitset GeneticSolver::reduced_fort(const VertexBitset &fort) {
   }
 
   return ~closure;
-  */
-  return minimum_fort_ip_subgraph(*graph, ~fort);
+  // return minimum_fort_ip_subgraph(*graph, ~fort);
 }
 
 void GeneticSolver::irradiate_population_unthreaded() {
@@ -264,8 +281,6 @@ void GeneticSolver::force_upper_bound(std::size_t ub) {
 }
 
 void GeneticSolver::force_incumbent(const VertexBitset &inc) {
-  std::unique_lock<std::shared_mutex> lock(_mutex);
-
   Individual ind(graph, inc);
     
   auto it = std::find_if(population.begin(), population.end(), [&](Individual &a) {
@@ -290,7 +305,6 @@ void GeneticSolver::force_incumbent(const VertexBitset &inc) {
 }
 
 void GeneticSolver::irradiate_population() {
-  std::unique_lock<std::shared_mutex> lock(_mutex);
   irradiate_population_unthreaded();
 }
 
@@ -306,7 +320,6 @@ void GeneticSolver::run(std::size_t generations) {
   // std::cout << "Gen 0: Initial Variance -> " << _best_variance << "\n";
 
   for (std::size_t a = 0; a < generations; a++) {
-    std::unique_lock<std::shared_mutex> lock(_mutex);
     if (dead) break;
 
     known_forts.clear();
@@ -348,12 +361,6 @@ void GeneticSolver::run(std::size_t generations) {
       _upper_bound = _best_z;
       _since_better_z = 0;
       _best_ind = current_best;
-      if (fc_solver) {
-        lock.unlock();
-        std::cout << "Setting incumbent solution (GA -> FC): " << _best_ind.get_z() << "\n";
-        fc_solver->force_incumbent(_best_ind.get_initial());
-        lock.lock();
-      }
       // std::cout << "Gen #" << a + 1 << ": Better Z(G) -> " << _best_z << "\n";
     } 
     else _since_better_z++;
@@ -374,32 +381,26 @@ void GeneticSolver::run(std::size_t generations) {
 }
 
 std::size_t GeneticSolver::since_better_variance() const {
-  std::shared_lock<std::shared_mutex> lock(_mutex);
   return _since_better_variance;
 }
 
 std::size_t GeneticSolver::since_better_score() const {
-  std::shared_lock<std::shared_mutex> lock(_mutex);
   return _since_better_score;
 }
 
 std::size_t GeneticSolver::since_better_z() const {
-  std::shared_lock<std::shared_mutex> lock(_mutex);
   return _since_better_z;
 }
 
 double GeneticSolver::best_score() const {
-  std::shared_lock<std::shared_mutex> lock(_mutex);
   return _best_score;
 }
 
 std::size_t GeneticSolver::best_z() const {
-  std::shared_lock<std::shared_mutex> lock(_mutex);
   return _best_z;
 }
 
 Individual GeneticSolver::best_individual() const {
-  std::shared_lock<std::shared_mutex> lock(_mutex);
   return _best_ind;
 }
 
@@ -416,11 +417,11 @@ std::pair<std::size_t, std::size_t> GeneticSolver::bound() const {
 }
 
 double GeneticSolver::variance() const {
-  if (population.empty() || graph->get_order() == 0) return 0.0;
+  if (population.empty() || graph->order() == 0) return 0.0;
 
   double total_variance = 0.0;
   std::size_t pop_size = population.size();
-  std::size_t num_vertices = graph->get_order();
+  std::size_t num_vertices = graph->order();
 
   for (Vertex u = 0; u < num_vertices; u++) {
     std::size_t bit_count = 0;
