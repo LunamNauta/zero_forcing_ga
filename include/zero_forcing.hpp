@@ -7,5 +7,7 @@ std::size_t zero_forcing_closure(const Graph &graph, VertexBitset &filled);
 std::size_t zero_forcing_closure(const Graph &graph, VertexSet &filled);
 
 std::size_t zero_forcing_wavefront(const Graph &graph, std::size_t upper_bound = std::numeric_limits<std::size_t>::max());
+std::size_t zero_forcing_wavefront_old1(const Graph &graph);
+std::size_t zero_forcing_wavefront_old2(const Graph &graph);
 
 #endif

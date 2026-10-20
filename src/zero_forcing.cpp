@@ -78,6 +78,7 @@ std::size_t zero_forcing_closure(const Graph &graph, VertexSet &filled) {
 }
 
 std::size_t zero_forcing_wavefront(const Graph &graph, std::size_t upper_bound) {
+  if (graph.order() == 0) return 0;
   upper_bound = std::min(graph.order(), upper_bound);
 
   std::list<std::pair<VertexBitset, std::size_t>> cl_pairs;
@@ -141,4 +142,118 @@ std::size_t zero_forcing_wavefront(const Graph &graph, std::size_t upper_bound) 
   }
 
   return upper_bound;
+}
+
+std::size_t zero_forcing_wavefront_old1(const Graph &graph) {
+  if (graph.order() == 0) return 0;
+
+  std::list<std::pair<VertexSet, std::size_t>> cl_pairs;
+  cl_pairs.push_back(std::pair<VertexSet, std::size_t>({}, 0));
+
+  for (std::size_t R = 1; R <= graph.order(); R++) {
+    for (auto j = cl_pairs.cbegin(); j != cl_pairs.cend(); j++) {
+      const VertexSet &S = j->first;
+      std::size_t r = j->second;
+
+      for (Vertex v = 0; v < graph.order(); v++) {
+        VertexSet S_new(S.cbegin(), S.cend());
+
+        S_new.insert(v);
+
+        VertexSet neighbors = graph.adjacent(v);
+        S_new.insert(neighbors.cbegin(), neighbors.cend());
+
+        zero_forcing_closure(graph,S_new);
+
+        std::size_t r_new = r;
+        if (S.find(v) == S.cend()) r_new++;
+
+        std::size_t neighbors_outside_S = 0;
+        for (VertexSet::const_iterator it = neighbors.cbegin(); it != neighbors.cend(); it++) {
+          if (S.find(*it) != S.cend()) continue;
+
+          neighbors_outside_S++;
+        }
+
+        if (neighbors_outside_S > 1) r_new += (neighbors_outside_S - 1);
+
+        if (r_new <= R) {
+          bool already_present = false;
+
+          for (auto it = cl_pairs.cbegin(); it != cl_pairs.cend(); it++) {
+            if (it->first != S_new || it->second > r_new) continue;
+
+            already_present = true;
+            break;
+          }
+
+          if (!already_present) {
+            cl_pairs.push_back(std::pair<VertexSet, int>(S_new, r_new));
+
+            if (S_new.size() == graph.order()) return r_new;
+          }
+        }
+      }
+    }
+  }
+
+  return graph.order();
+}
+
+std::size_t zero_forcing_wavefront_old2(const Graph &graph) {
+  if (graph.order() == 0) return 0;
+
+  std::list<std::pair<VertexBitset, std::size_t>> cl_pairs;
+  cl_pairs.push_back(std::pair<VertexBitset, std::size_t>(VertexBitset(graph.order(), false), 0));
+
+  for (std::size_t R = 1; R <= graph.order(); R++) {
+    for (auto j = cl_pairs.cbegin(); j != cl_pairs.cend(); j++) {
+      const VertexBitset &S = j->first;
+      std::size_t r = j->second;
+
+      for (Vertex v = 0; v < graph.order(); v++) {
+        VertexBitset S_new = S;
+
+        S_new.set(v);
+
+        VertexSet neighbors = graph.adjacent(v);
+        for (VertexSet::const_iterator it = neighbors.cbegin(); it != neighbors.cend(); it++) {
+          S_new.set(*it);
+        }
+
+        zero_forcing_closure(graph,S_new);
+
+        std::size_t r_new = r;
+        if (!S.test(v)) r_new++;
+
+        std::size_t neighbors_outside_S = 0;
+        for (VertexSet::const_iterator it = neighbors.cbegin(); it != neighbors.cend(); it++) {
+          if (S.test(*it)) continue;
+
+          neighbors_outside_S++;
+        }
+
+        if (neighbors_outside_S > 1) r_new += (neighbors_outside_S - 1);
+
+        if (r_new <= R) {
+          bool already_present = false;
+
+          for (auto it = cl_pairs.cbegin(); it != cl_pairs.cend(); it++) {
+            if (it->first != S_new || it->second > r_new) continue;
+
+            already_present = true;
+            break;
+          }
+
+          if (!already_present) {
+            cl_pairs.push_back(std::pair<VertexBitset, std::size_t>(S_new, r_new));
+
+            if (S_new.count() == graph.order()) return r_new;
+          }
+        }
+      }
+    }
+  }
+
+  return graph.order();
 }
