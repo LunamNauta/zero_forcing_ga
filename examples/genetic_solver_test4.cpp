@@ -84,7 +84,7 @@ int main() {
         GeneticSolver solver(&graph, pop_size);
 
         // Record initial state (Generation 0)
-        csv << name << ",0," << solver.best_score() << "," << solver.best_z() << "," << solver.variance() << "\n";
+        csv << name << ",0," << solver.info().best_score() << "," << solver.info().best_z() << "," << solver.info().variance() << "\n";
 
         std::cout << "Finding exact... ";
         std::size_t exact = zero_forcing_wavefront(graph);
@@ -92,8 +92,8 @@ int main() {
 
         for (std::size_t g = 1; g <= total_gens; ++g) {
             // solver.run(1);
-            if (solver.best_z() == exact) break;
-            csv << name << "," << g << "," << solver.best_score() << "," << solver.best_z() << "," << solver.variance() << "\n";
+            if (solver.info().best_z() == exact) break;
+            csv << name << "," << g << "," << solver.info().best_score() << "," << solver.info().best_z() << "," << solver.info().variance() << "\n";
         }
         std::cout << "DONE\n";
     }

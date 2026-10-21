@@ -36,7 +36,7 @@ TrialResult run_adaptive_trial(const std::string& param_name,
 
     GeneticSolver solver(&graph, pop_size);
     
-    std::size_t best_z_val = solver.best_z();
+    std::size_t best_z_val = solver.info().best_z();
     std::size_t gens_to_sol = 1;
     std::size_t stable_gens = 0;
     std::size_t total_gens = 0;
@@ -45,7 +45,7 @@ TrialResult run_adaptive_trial(const std::string& param_name,
     for (std::size_t g = 1; g <= max_gens; ++g) {
         solver.run(1);
         total_gens = g;
-        std::size_t current_z = solver.best_z();
+        std::size_t current_z = solver.info().best_z();
         
         if (current_z < best_z_val) {
             best_z_val = current_z;

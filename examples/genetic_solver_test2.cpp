@@ -47,10 +47,10 @@ BenchmarkResult run_trial(std::size_t current_trial,
     // Log trial results immediately upon completion
     std::cout << "DONE in " << std::right << std::fixed << std::setprecision(2) 
               << std::setw(7) << duration << " ms"
-              << " | Best Z: " << std::setw(3) << solver.best_z() 
-              << " | Var: " << std::setprecision(4) << solver.variance() << "\n";
+              << " | Best Z: " << std::setw(3) << solver.info().best_z() 
+              << " | Var: " << std::setprecision(4) << solver.info().variance() << "\n";
 
-    return {exp_type, type_name, graph.order(), pop_size, generations, duration, solver.best_z()};
+    return {exp_type, type_name, graph.order(), pop_size, generations, duration, solver.info().best_z()};
 }
 
 int main() {

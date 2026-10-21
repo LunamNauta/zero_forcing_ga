@@ -44,7 +44,7 @@ TrialResult run_averaged_trials(const std::string& param_name,
         auto start = std::chrono::high_resolution_clock::now();
         GeneticSolver solver(&graph, pop_size);
         
-        std::size_t best_z_val = solver.best_z();
+        std::size_t best_z_val = solver.info().best_z();
         std::size_t gens_to_sol = 1;
         std::size_t stable_gens = 0;
         std::size_t total_gens = 0; // Now safe to use for the inner loop
@@ -52,7 +52,7 @@ TrialResult run_averaged_trials(const std::string& param_name,
 
         for (std::size_t g = 1; g <= 1000000000; ++g, total_gens++) {
             solver.run(1);
-            std::size_t current_z = solver.best_z();
+            std::size_t current_z = solver.info().best_z();
             
             if (current_z < best_z_val) {
                 best_z_val = current_z;
@@ -75,7 +75,7 @@ TrialResult run_averaged_trials(const std::string& param_name,
         for (std::size_t g = 1; g <= 1000000000; ++g, total_gens++) {
             solver.run(1);
             total_gens = g;
-            std::size_t current_z = solver.best_z();
+            std::size_t current_z = solver.info().best_z();
             
             if (current_z < best_z_val) {
                 best_z_val = current_z;

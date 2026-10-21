@@ -1,146 +1,116 @@
 #ifndef GENETIC_SOLVER_HEADER
 #define GENETIC_SOLVER_HEADER
 
-#include "../include/weighted_sampler.hpp"
 #include "../include/zero_forcing.hpp"
 #include "../include/graph.hpp"
+#include "weighted_sampler.hpp"
 
-#include <shared_mutex>
-#include <random>
 #include <atomic>
+#include <cmath>
+#include <cstddef>
+#include <random>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
-typedef VertexBitset Gene;
-
-class FortCoverSolver;
+using Gene = VertexBitset;
 
 struct Individual {
   const Graph *graph;
-  VertexBitset initial;
+  const WeightedSampler *sampler;
+  VertexBitset _initial;
   VertexBitset closure;
   std::size_t pt;
   bool dirty;
 
-  Individual(const Graph *gi) :
-    graph(gi),
-    initial(gi->order()),
-    closure(gi->order()),
-    pt(0),
-    dirty(false)
-  {
-    initial.set();
-    closure.set();
-  }
-  Individual(const Graph *gi, const VertexBitset &ii) : graph(gi) {
-    set_initial(ii);
-  }
+  Individual(const Graph *gi, const WeightedSampler *si, const VertexBitset &ii);
+  Individual(const Graph *gi, const WeightedSampler *si);
 
-  void update() {
-    closure = initial;
-    pt = zero_forcing_closure(*graph, closure);
-    dirty = false;
-  }
+  void update();
 
-  void set_initial(const VertexBitset &ii) {
-    initial = ii;
-    initial.resize(graph->order(), false);
-    dirty = true;
-  }
-  VertexBitset get_initial() {
-    return initial;
-  }
+  VertexBitset initial(const VertexBitset &ii);
+  VertexBitset initial() const;
 
-  double get_score() {
-    if (dirty) update();
+  double score();
+  std::size_t z();
+  bool forces();
+};
 
-    double size_bonus = graph->order() - initial.count();
-    double force_penalty = graph->order() - closure.count();
-    double pt_bonus = 1.0 - (static_cast<double>(pt) / graph->order());
-    return size_bonus - force_penalty + pt_bonus;
-  }
-  std::size_t get_z() {
-    return initial.count();
-  }
-  bool forces() {
-    if (dirty) update();
-    return closure.count() == graph->order();
-  }
+class GeneticSolverInfo {
+private:
+  Individual _best_individual;
+  double _best_variance;
+  double _best_score;
+  std::size_t _best_z;
+  double _variance;
+
+  std::size_t _since_better_variance;
+  std::size_t _since_better_score;
+  std::size_t _since_better_z;
+
+  std::size_t _upper_bound;
+  std::size_t _lower_bound;
+
+public:
+  GeneticSolverInfo(const Graph *gi, const WeightedSampler *si);
+
+  Individual best_individual() const;
+  double best_variance() const;
+  double best_score() const;
+  std::size_t best_z() const;
+  double variance() const;
+
+  std::size_t since_better_variance() const;
+  std::size_t since_better_score() const;
+  std::size_t since_better_z() const;
+
+  std::pair<std::size_t, std::size_t> bound() const;
+  std::size_t upper_bound() const;
+  std::size_t lower_bound() const;
+
+  friend class GeneticSolver;
 };
 
 class GeneticSolver {
 private:
   const Graph *graph;
-  std::vector<Individual> population;
-  double min_mutation;
-  double max_mutation;
-  double mutation_pct;
-  double min_elite;
-  double max_elite;
-  double elite_pct;
   WeightedSampler sampler;
+  GeneticSolverInfo _info;
+  std::vector<Individual> population;
   std::mt19937 gen;
-
-  std::atomic<std::size_t> _lower_bound;
-  std::atomic<std::size_t> _upper_bound;
-
-  std::size_t _since_better_variance;
-  std::size_t _since_better_score;
-  std::size_t _since_better_z;
-  double _best_variance;
-  double _best_score;
-  std::size_t _best_z;
-  Individual _best_ind;
-
   std::unordered_set<VertexBitset> known_forts;
   bool dead;
 
-  // Initialization ----------------------------------------------------------------
   void initialize_population();
 
-  // Population Functions ----------------------------------------------------------------
-  void crossover_population();
-  void fix_population();
-  void reduce_population();
-
-  // Individual Functions ----------------------------------------------------------------
-  Individual crossover_individual(Individual &ind1, Individual &ind2);
-  void fix_individual(Individual &ind);
-  void reduce_individual(Individual &ind);
-
-  // Selection Functions ----------------------------------------------------------------
   std::pair<Individual&, Individual&> select_parents();
+  Individual crossover_individual(Individual &ind1, Individual &ind2);
+  void crossover_all_individuals();
 
-  // Fort Acknowledgement ----------------------------------------------------------------
-  void acknowledge_fort(const VertexBitset &fort, bool reduce = true);
-  VertexBitset reduced_fort(const VertexBitset &fort);
+  void repair_individual(Individual &ind);
+  void repair_all_individuals();
 
-  // Unthreaded Functions ----------------------------------------------------------------
-  void irradiate_population_unthreaded();
+  void trim_individual(Individual &ind);
+  void trim_all_individuals();
+
+  void trim_fort(VertexBitset &fort);
+  void trim_all_forts();
+
+  void acknowledge_fort(const VertexBitset &fort);
+  void acknowledge_all_forts();
+
+  void update_info();
+  double variance() const;
 
 public:
-  // Initialization ----------------------------------------------------------------
   GeneticSolver(const Graph *gi, std::size_t psi);
 
-  // Information Addition ----------------------------------------------------------------
-  void force_lower_bound(std::size_t lb);
   void force_upper_bound(std::size_t ub);
-  void force_incumbent(const VertexBitset &inc);
-  void irradiate_population();
+  void force_lower_bound(std::size_t lb);
 
-  // Running ----------------------------------------------------------------
-  void kill();
+  GeneticSolverInfo info() const;
   void run(std::size_t generations);
-
-  // Introspection ----------------------------------------------------------------
-  std::size_t since_better_variance() const;
-  std::size_t since_better_score() const;
-  std::size_t since_better_z() const;
-  double best_score() const;
-  std::size_t best_z() const;
-  Individual best_individual() const;
-  std::size_t lower_bound() const;
-  std::size_t upper_bound() const;
-  std::pair<std::size_t, std::size_t> bound() const;
-  double variance() const;
+  void kill();
 };
 
 #endif

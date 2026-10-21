@@ -1,4 +1,4 @@
-#include "../include/weighted_sampler.hpp"
+#include "weighted_sampler.hpp"
 
 WeightedSampler::WeightedSampler(const Graph *graph) :
   graph(graph),

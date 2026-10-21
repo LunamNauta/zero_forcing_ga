@@ -46,20 +46,20 @@ SuiteResults test_graph_suite(const std::string& suite_name, const std::vector<G
         
         std::size_t generation = 0;
         std::size_t generation_found = 0;
-        double best_variance = solver.variance();
+        double best_variance = solver.info().variance();
 
         while (true) {
             solver.run(1);
             generation++;
-            if (solver.since_better_z() == 0) generation_found = generation;
+            if (solver.info().since_better_z() == 0) generation_found = generation;
             
-            double current_variance = solver.variance();
-            if (current_variance < 0.5 / population_size || solver.since_better_score() > generations_before_quit) break;
+            double current_variance = solver.info().variance();
+            if (current_variance < 0.5 / population_size || solver.info().since_better_score() > generations_before_quit) break;
         }
 
         std::cout << "Generation Found: " << generation_found << "\n";
         std::size_t expected = zero_forcing_wavefront(graph);
-        std::int64_t delta = solver.best_z() - expected;
+        std::int64_t delta = solver.info().best_z() - expected;
         std::cout << "Distance: " << delta << "\n\n";
         
         if (delta < 0) { std::cerr << "Critical Error: Logic failed\n"; exit(1); }

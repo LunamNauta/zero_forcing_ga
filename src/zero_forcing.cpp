@@ -1,4 +1,4 @@
-#include "../include/zero_forcing.hpp"
+#include "zero_forcing.hpp"
 
 #include <list>
 
