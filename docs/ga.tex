@@ -1,0 +1,247 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{fullpage}
+\usepackage{enumitem}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{optidef}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\title{A Memetic Genetic Algorithm for the Minimum Zero Forcing Set Problem}
+\author{Thomas R. Cameron}
+\date{\today}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}{Lemma}
+
+\newcommand\abs[1]{\left|#1\right|}
+\newcommand\ceil[1]{\left\lceil #1\right\rceil}
+\newcommand\floor[1]{\left\lfloor #1\right\rfloor}
+\newcommand\cl[1]{\operatorname{cl}\left(#1\right)}
+\newcommand\shuffle[1]{\operatorname{shuffle}\left(#1\right)}
+
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This report describes a memetic genetic algorithm for the minimum
+zero forcing set problem. The algorithm combines evolutionary search
+with a repair operator based on the zero forcing closure. Every
+infeasible candidate solution encountered during the search is
+converted into a feasible zero forcing set through a fort-guided
+repair procedure. The minimal forts discovered during repair are
+used to guide future crossover operations, generate generation-level
+lower bounds, and produce structurally diverse solutions. Unlike
+classical genetic algorithms, the proposed method continuously
+extracts structural information from failed solutions and feeds this
+information back into the evolutionary process.
+\end{abstract}
+
+\section{Introduction}
+
+Let $G=(V,E)$ be a simple graph of order $n$. A set
+$S \subseteq V$ is a \emph{zero forcing set} if repeated application
+of the color change rule eventually colors every vertex of the graph.
+The minimum cardinality of a zero forcing set is called the
+\emph{zero forcing number} and is denoted by $Z(G)$.
+
+The zero forcing problem is NP-hard, and therefore exact methods
+may require substantial computational effort on large graphs.
+Genetic algorithms provide a natural framework for exploring
+large combinatorial search spaces. 
+The objective of this report is to describe a specialized genetic
+algorithm designed specifically for zero forcing. The algorithm
+combines three key ideas:
+
+\begin{enumerate}[label=(\roman*)]
+\item every candidate solution is repaired into a feasible
+zero forcing set,
+
+\item failed candidate solutions generate minimal forts,
+
+\item fort information is used to influence future generations.
+\end{enumerate}
+
+Because of the repair operator and local improvement procedures,
+the method is more accurately described as a memetic algorithm
+than a classical genetic algorithm.
+
+\section{Preliminaries}
+For a set $S \subseteq V$, let $\cl{S}$ denote the zero forcing closure of $S$.
+If $\cl{S}=V$, then $S$ is a zero forcing set.
+Otherwise, $F=V\setminus\cl{S}$ is a fort, that is, no vertex outside $F$ has exactly one neighbor in $F$.
+The following characterization motivates the algorithm.
+
+\begin{theorem}
+A set $S \subseteq V$ is a zero forcing set if and only if
+$S$ intersects every fort of $G$.
+\end{theorem}
+
+Thus every failed candidate solution provides information about
+forts that must be intersected by any feasible solution.
+
+\subsection{Solution Representation}
+Each individual is represented by a subset $S \subseteq V$.
+Internally, a binary encoding may be used, where
+\[
+x_v =
+\begin{cases}
+1 & v \in S,\\
+0 & v \notin S.
+\end{cases}
+\]
+
+\subsection{Vertex Weight}
+The genetic algorithm will often take random samples of vertices to construct zero forcing sets.
+When doing so, it is helpful to prioritize vertices that cover more forts.
+Since there can be an exponential number of forts, we don't plan on storing all forts.
+Instead, we will keep track of a vertex weight that represents the number of forts we have encountered.
+Note that every time a failed zero forcing set is encountered, the complement of its closure is a fort. 
+Moreover, in a single generation of the genetic algorithm we will encounter many forts; once the generation is complete, we update the vertex weight with the distinct forts encountered. 
+
+Initially, each vertex $v\in V$ gets weight $w_{v}=0.01$.
+Thus, the initial vertex weights correspond to a uniform distribution, and once forts are observed the corresponding weights change dramatically. 
+Then, after each generation we take the collection of observed forts $\mathcal{F}$ and we update the vertex weights as follows
+\[
+w_{v} = \epsilon\cdot w_{v} + \sum_{F\in\mathcal{F}\colon v\in F}\frac{1}{\abs{F}},
+\]
+where $\epsilon=0.9$.
+Note that the product $\epsilon\cdot w_{v}$ is used to prioritize recent generational fort information over older information.
+Moreover, the term $\frac{1}{\abs{F}}$ prioritizes smaller forts over bigger forts. 
+
+\subsection{Random Sampling Conventions}
+Throughout the algorithm, we distinguish between uniform random choices and weight-biased random choices.
+
+A random permutation of a set $A$, denoted by $\shuffle{A}$, is always taken uniformly over all permutations of $A$.
+Similarly, a random sample of the population members is taken uniformly. 
+
+By contrast, random samples of vertices from $V$, or from a specified subset $S\subseteq V$, may be taken using the current vertex weights $w_v$.
+Unless explicitly stated otherwise, such vertex samples are weight-biased, with vertices of larger weight more likely to be selected.
+In particular, for each $v\in S$, we select a uniform random number $\mu\in(0,1)$ and compute
+\[
+\mu^{1/a_{v}},
+\]
+where $a_{v}=\frac{w_{v}}{\sum_{u\in V}w_{u}}$ is the normalized weight of vertex $v$. 
+Since $\mu\in(0,1)$ vertices with larger weights will correspond to bigger values.
+A weight-biased random sample of size $k$ returns the $k$ vertices with largest values. 
+
+\subsection{Population Initialization}
+The algorithm maintains a population of size $p=10$.
+Throughout the search, lower and upper bounds satisfy $lb \le Z(G) \le ub$.
+Initially, the bounds may be taken as $lb=1$ and $ub=n$, although stronger bounds based on the graph structure are often available. 
+
+To generate the population of size $p$, we define $\Delta p=\ceil{\frac{ub-lb}{p}}$.
+Then, for each 
+\[
+k\in\{lb,lb+\Delta p,lb+2\Delta p,\ldots,lb+(p-1)\Delta p\}
+\]
+\begin{enumerate}
+\item Generate a weight-biased random subset $S \subseteq V$ with
+$|S|=k$.
+
+\item Apply the repair procedure.
+
+\item Insert the repaired solution into the population.
+\end{enumerate}
+Note that the repair procedure likely changes the size of the initial random sample by either adding vertices so that $S$ becomes a zero forcing set, or removing vertices so that $S$ is minimal.
+Moreover, while no repaired zero forcing $S$ will be smaller than $lb$, it may be larger than $ub$; indeed, minimal zero forcing sets can be larger than the incumbent upper bound. 
+
+\subsection{Fitness Scores}
+Each population member gets a fitness score defines as follows
+\[
+f(S) = \alpha\cdot\left(\abs{V}-\abs{S}\right) + \frac{\beta}{\sum_{v\in V}w_{v}}\cdot\sum_{v\in S}w_{v},
+\]
+where $\alpha=1$ and $\beta=0.1$. 
+Therefore, the fitness score first prioritizes the size of the zero forcing set and second the relative weight of the forts it hits. 
+
+\subsection{Repair Procedure}
+The repair procedure is an important aspect of this genetic algorithm because it both ensures that every member of the population is a zero forcing set and provides important fort information.
+Given a candidate set $S$, compute its closure $C=\cl{S}$.
+If $C=V$, then $S$ is already a zero forcing set and we apply the trim procedure to ensure $S$ is minimal.
+Otherwise, $C$ is a failed zero forcing set and $F=V\setminus C$ is a fort.
+
+Let $\shuffle{F}$ denote a uniformly random permutation of the vertices in $F$.
+Also, let $z\in\{0,1\}$ denote a binary variable that indicates whether or not $S$ is a zero forcing set, initially $z=0$. 
+Then, for each $u\in\shuffle{F}$
+\begin{enumerate}
+\item If $u\notin C$, then set $C' = C\cup\{u\}$. 
+
+\item If $\cl{C'}= V$ and $z=0$, then update $S=S\cup\{u\}$ and $z=1$.
+
+\item If $\cl{C'}\neq V$, then update $C=\cl{C'}$; furthermore, if $z=0$ then update $S=S\cup\{u\}$.
+\end{enumerate}
+Once all vertices in $F$ have been considered, the set $C$ is a maximal failed zero forcing set, $F=V\setminus C$ is a minimal fort, and $S$ is a zero forcing set.
+We ensure that $S$ is a minimal zero forcing set by applying the trim procedure. 
+
+\subsection{Trim Procedure}
+The trim procedure takes a zero forcing set $S$ and removes as many vertices as possible while maintaining the zero forcing property. 
+In particular, let $\shuffle{S}$ denote a uniformly random permutation of the vertices in $S$.
+Then, for each $u\in\shuffle{S}$
+\begin{enumerate}
+\item Let $S'=S\setminus\{u\}$.
+
+\item If $\cl{S'}=V$, then update $S=S'$. 
+\end{enumerate}
+Once all vertices in $S$ have been considered, the updated set $S$ is a minimal zero forcing set. 
+
+\section{Generational Evolution}
+The genetic algorithm evolves its population generation by generation. 
+The initial population is considered generation $0$.
+Let $g\geq 0$ denote the generation number and let 
+\[
+\mathcal{P}_{g} = \left\{S_{1}^{(g)},S_{2}^{(g)},\ldots,S_{10}^{(g)}\right\}
+\]
+denote the population at generation $g$, where $S_{1}^{(g)},S_{2}^{(g)},\ldots,S_{10}^{(g)}$ are the members of the population (zero forcing sets) ordered from largest to smallest fitness scores. 
+
+The top $10\%$ of the population, $S_{1}^{(g)}$, are considered the elite members of the population at generation $g$. 
+We update the remaining $90\%$ of the population through the selection, crossover, and replacement events. 
+
+\subsection{Selection}
+In the selection process, two members of the population are selected to construct a new member of the population via crossover.
+The members are selected as follows: A uniformly random sample of size $3$ is taken from the population $\mathcal{P}_{g}$.
+Then, all $\binom{3}{2}$ combinations are scored based on their combined fitness and symmetric difference:
+\[
+s\left(S_{i}^{(g)},S_{j}^{(g)}\right) = \frac{\gamma}{f(S_{1}^{(g)})}\cdot\left(f(S_{i}^{(g)})+f(S_{j}^{(g)})\right) + \delta\cdot\left(1 - \frac{\abs{S_{i}^{(g)}\cap S_{j}^{(g)}}}{\abs{S_{i}^{(g)}\cup S_{j}^{(g)}}}\right),
+\]
+where $\left(1-\frac{\abs{A\cap B}}{\abs{A\cup B}}\right)$ is the Jaccard distance between $A$ and $B$, $\gamma=1$, and $\delta=0.1$.
+
+\subsection{Crossover}
+Once two members of the population have been selected, say $S_{i}^{(g)}$ and $S_{j}^{(g)}$, the crossover process constructs a new member of the population.
+Let $H\subseteq V\setminus\left(S_{i}^{(g)}\cup S_{j}^{(g)}\right)$ denote a weight-biased random sample of a random size.
+Also, let $r=3$ and $\Delta r=\ceil{\frac{ub-lb}{r}}$.
+Then, for each 
+\[
+k\in\left\{lb,lb+\Delta r,lb+2\Delta r,\ldots,lb+(r-1)\Delta r\right\}
+\]
+\begin{enumerate}
+\item Generate a weight-biased random subset $S\subseteq S_{i}^{(g)}\cup S_{j}^{(g)}\cup H$ with $\abs{S}=k$.
+
+\item Apply the repair procedure.
+\end{enumerate}
+After all $k$ have been considered, store the zero forcing set that has the highest fitness score. 
+
+\subsection{Replacement}
+Suppose that the selection and crossover processes have been repeated $8$ times.
+Then, there are approximately $8r$ minimal forts that have been constructed from the repair function. 
+Let $\mathcal{F}_{g}$ denote the (distinct) minimal forts that have been encountered during generation $g\geq 0$. 
+We use these minimal forts to update the vertex weights and to construct one more zero forcing set to be added to the population.
+
+Define $Z_{g}(G)$ to be the minimum size of a set of vertices $S$ such that $S\cap F\neq\emptyset$ for all $F\in\mathcal{F}_{G}$. 
+Note that $Z_{g}(G)\leq Z(G)$.
+Moreover, $Z_{g}(G)$ can be computed as a fort cover model IP over the forts in $\mathcal{F}_{g}$; since the number of minimal forts in $\mathcal{F}_{g}$ is at most $8r$, this model will likely finish quickly even on large graphs.
+Once the model completes, we have an optimal set $S$ that hits every fort in $\mathcal{F}_{g}$.
+While $S$ hits every fort in $\mathcal{F}_{g}$, it may not not be a zero forcing set of $G$. 
+In this case, we apply the repair function to $S$.
+
+At this point, we have constructed $9$ minimal zero forcing sets that are used to update population members $S_{2}^{(g)},\ldots,S_{10}^{(g)}$. 
+Upon updating the members of the population, we are now in generation $g+1$.
+At this point, we re-order the population from largest to smallest fitness, discard the forts observed in the previous generation, and we update $lb=\max\{lb,Z_{g}(G)\}$ and 
+\[
+ub = \min\left\{ub,\abs{S_{1}^{(g+1)}},\abs{S_{2}^{(g+1)}},\ldots,\abs{S_{10}^{(g+1)}}\right\}.
+\]
+
+\end{document}

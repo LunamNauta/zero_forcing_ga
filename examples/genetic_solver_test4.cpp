@@ -6,6 +6,7 @@
 #include <filesystem>
 
 #include "../include/graph.hpp"
+#include "../include/zero_forcing.hpp"
 #include "../include/genetic_solver.hpp"
 
 namespace fs = std::filesystem;

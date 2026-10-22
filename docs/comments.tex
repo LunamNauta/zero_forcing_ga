@@ -1,0 +1,421 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{fullpage}
+\usepackage{enumitem}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{optidef}
+\usepackage{hyperref}
+\usepackage{xcolor}
+
+\title{A Memetic Genetic Algorithm for the Minimum Zero Forcing Set Problem}
+\author{Thomas R. Cameron}
+\date{\today}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}{Proposition}
+\newtheorem{lemma}{Lemma}
+
+\newcommand\abs[1]{\left|#1\right|}
+\newcommand\ceil[1]{\left\lceil #1\right\rceil}
+\newcommand\floor[1]{\left\lfloor #1\right\rfloor}
+\newcommand\cl[1]{\operatorname{cl}\left(#1\right)}
+\newcommand\shuffle[1]{\operatorname{shuffle}\left(#1\right)}
+
+% ---- additions for the comparison notes -------------------------------------------------
+\newenvironment{diff}{\par\medskip\noindent\begingroup\color{red}\bfseries\boldmath}{\par\endgroup\medskip}
+\newcommand{\code}[1]{{\mdseries\ttfamily\detokenize{#1}}}
+\emergencystretch=3em
+
+
+\begin{document}
+
+\maketitle
+\begin{diff}
+Reading guide. This document reproduces the reference report verbatim; every red bold paragraph compares the text above it with the current implementation (\code{genetic_solver.cpp}). ``Identical to source'' means there is no behavioral Difference to source, and the code reflects a near exact mapping from the source. ``Identical in effect'' means there is no behavioral Difference to source, but a slight syntactic difference. ``Difference to source'' means that the code differs from the source. Where the code differs, the note says what differs and why. Paragraphs that only define terms or give motivation have no counterpart in the code and carry no note.
+\end{diff}
+
+
+\begin{abstract}
+This report describes a memetic genetic algorithm for the minimum
+zero forcing set problem. The algorithm combines evolutionary search
+with a repair operator based on the zero forcing closure. Every
+infeasible candidate solution encountered during the search is
+converted into a feasible zero forcing set through a fort-guided
+repair procedure. The minimal forts discovered during repair are
+used to guide future crossover operations, generate generation-level
+lower bounds, and produce structurally diverse solutions. Unlike
+classical genetic algorithms, the proposed method continuously
+extracts structural information from failed solutions and feeds this
+information back into the evolutionary process.
+\end{abstract}
+
+\section{Introduction}
+
+Let $G=(V,E)$ be a simple graph of order $n$. A set
+$S \subseteq V$ is a \emph{zero forcing set} if repeated application
+of the color change rule eventually colors every vertex of the graph.
+The minimum cardinality of a zero forcing set is called the
+\emph{zero forcing number} and is denoted by $Z(G)$.
+
+The zero forcing problem is NP-hard, and therefore exact methods
+may require substantial computational effort on large graphs.
+Genetic algorithms provide a natural framework for exploring
+large combinatorial search spaces. 
+The objective of this report is to describe a specialized genetic
+algorithm designed specifically for zero forcing. The algorithm
+combines three key ideas:
+
+\begin{enumerate}[label=(\roman*)]
+\item every candidate solution is repaired into a feasible
+zero forcing set,
+\begin{diff}
+Identical in effect: \code{initialize_population} and \code{crossover_individual} pass every sample through \code{repair_individual} and then \code{trim_individual}. The only structural difference (repair and trim are separate calls) is explained in \S2.6.
+\end{diff}
+
+
+\item failed candidate solutions generate minimal forts,
+\begin{diff}
+Identical in effect: \code{repair_individual} stores the complement of its last failed closure in \code{known_forts} (one fort per repair), and \code{trim_all_forts} later shrinks each stored fort to a minimal one. Failed removals inside \code{trim_individual} are not recorded.
+\end{diff}
+
+
+\item fort information is used to influence future generations.
+\begin{diff}
+Identical in effect: \code{acknowledge_all_forts} gives every distinct minimal fort of the generation to \code{sampler.update_weights}, and the next generation samples with the new weights. The arithmetic of the weights differs from the report (\S2.2).
+\end{diff}
+
+\end{enumerate}
+
+Because of the repair operator and local improvement procedures,
+the method is more accurately described as a memetic algorithm
+than a classical genetic algorithm.
+\begin{diff}
+Identical to source.
+\end{diff}
+
+
+\section{Preliminaries}
+For a set $S \subseteq V$, let $\cl{S}$ denote the zero forcing closure of $S$.
+If $\cl{S}=V$, then $S$ is a zero forcing set.
+Otherwise, $F=V\setminus\cl{S}$ is a fort, that is, no vertex outside $F$ has exactly one neighbor in $F$.
+The following characterization motivates the algorithm.
+\begin{diff}
+Identical to source.
+\end{diff}
+
+
+\begin{theorem}
+A set $S \subseteq V$ is a zero forcing set if and only if
+$S$ intersects every fort of $G$.
+\end{theorem}
+
+Thus every failed candidate solution provides information about
+forts that must be intersected by any feasible solution.
+\begin{diff}
+Identical to source.
+\end{diff}
+
+
+\subsection{Solution Representation}
+Each individual is represented by a subset $S \subseteq V$.
+Internally, a binary encoding may be used, where
+\[
+x_v =
+\begin{cases}
+1 & v \in S,\\
+0 & v \notin S.
+\end{cases}
+\]
+\begin{diff}
+Identical to source.
+\end{diff}
+
+
+\subsection{Vertex Weight}
+The genetic algorithm will often take random samples of vertices to construct zero forcing sets.
+When doing so, it is helpful to prioritize vertices that cover more forts.
+Since there can be an exponential number of forts, we don't plan on storing all forts.
+Instead, we will keep track of a vertex weight that represents the number of forts we have encountered.
+Note that every time a failed zero forcing set is encountered, the complement of its closure is a fort. 
+Moreover, in a single generation of the genetic algorithm we will encounter many forts; once the generation is complete, we update the vertex weight with the distinct forts encountered. 
+\begin{diff}
+Identical to source in effect. \code{trim_all_forts} reduces the forts recorded during the generation to distinct minimal forts, and \code{acknowledge_all_forts} then passes each one once to the sampler after the generation is complete and clears the set (``discard the forts observed in the previous generation''). One difference: only repair records forts (one per repair call), so the sentence ``every time a failed zero forcing set is encountered'' is realized for repair and not for failed removals in trim. Why: recording every failure would multiply the cost of minimization, and repair already supplies the roughly $8r$ forts per generation that \S3.3 assumes.
+\end{diff}
+
+
+Initially, each vertex $v\in V$ gets weight $w_{v}=0.01$.
+Thus, the initial vertex weights correspond to a uniform distribution, and once forts are observed the corresponding weights change dramatically. 
+\begin{diff}
+Identical to source.
+\end{diff}
+\noindent
+
+Then, after each generation we take the collection of observed forts $\mathcal{F}$ and we update the vertex weights as follows
+\[
+w_{v} = \epsilon\cdot w_{v} + \sum_{F\in\mathcal{F}\colon v\in F}\frac{1}{\abs{F}},
+\]
+\begin{diff}
+Identical to source.
+\end{diff}
+\noindent
+
+where $\epsilon=0.9$.
+Note that the product $\epsilon\cdot w_{v}$ is used to prioritize recent generational fort information over older information.
+Moreover, the term $\frac{1}{\abs{F}}$ prioritizes smaller forts over bigger forts. 
+\begin{diff}
+Identical to source.
+\end{diff}
+
+
+\subsection{Random Sampling Conventions}
+Throughout the algorithm, we distinguish between uniform random choices and weight-biased random choices.
+
+A random permutation of a set $A$, denoted by $\shuffle{A}$, is always taken uniformly over all permutations of $A$.
+Similarly, a random sample of the population members is taken uniformly. 
+\begin{diff}
+Identical to source.
+\end{diff}
+
+
+By contrast, random samples of vertices from $V$, or from a specified subset $S\subseteq V$, may be taken using the current vertex weights $w_v$.
+Unless explicitly stated otherwise, such vertex samples are weight-biased, with vertices of larger weight more likely to be selected.
+In particular, for each $v\in S$, we select a uniform random number $\mu\in(0,1)$ and compute
+\[
+\mu^{1/a_{v}},
+\]
+where $a_{v}=\frac{w_{v}}{\sum_{u\in V}w_{u}}$ is the normalized weight of vertex $v$. 
+Since $\mu\in(0,1)$ vertices with larger weights will correspond to bigger values.
+A weight-biased random sample of size $k$ returns the $k$ vertices with largest values. 
+\begin{diff}
+Identical to source.
+\end{diff}
+
+
+\subsection{Population Initialization}
+The algorithm maintains a population of size $p=10$.
+Throughout the search, lower and upper bounds satisfy $lb \le Z(G) \le ub$.
+Initially, the bounds may be taken as $lb=1$ and $ub=n$, although stronger bounds based on the graph structure are often available. 
+\begin{diff}
+Difference to source: The population size is not fixed at 10: it is a constructor argument, \code{std::max<std::size_t>(3, config.population_size)}. Why: configurability for experiments; the minimum of 3 is needed because \code{select_parents} draws three distinct individuals. Realistically, the tournament size should also be configurable, in which case that 3 would become a variable.
+\end{diff}
+
+
+To generate the population of size $p$, we define $\Delta p=\ceil{\frac{ub-lb}{p}}$.
+Then, for each 
+\[
+k\in\{lb,lb+\Delta p,lb+2\Delta p,\ldots,lb+(p-1)\Delta p\}
+\]
+\begin{diff}
+Difference to source: \code{initialize_population} uses the real-valued step $(ub-lb)/(p-1)$ and $k=lb+\lfloor a\cdot\mathrm{step}\rfloor$ for $a=0,\ldots,p-1$, instead of $\Delta p=\lceil (ub-lb)/p\rceil$. The code's sizes therefore run from [$lb$, $ub$], whereas the report's can be [$lb$, $ub$), depending on the population size. Why: even spacing that includes both bounds and avoids the artifacts of the ceiling (i.e. sometimes undershooting, sometimes overshooting $ub$). This also guarantees that the set of all vertices is a member of the population, which is nice.
+\end{diff}
+
+\begin{enumerate}
+\item Generate a weight-biased random subset $S \subseteq V$ with
+$|S|=k$.
+\begin{diff}
+Identical to source.
+\end{diff}
+
+
+\item Apply the repair procedure.
+\begin{diff}
+Identical in effect. \code{initialize_population} calls \code{repair_individual} and then \code{trim_individual} (repair does not trim itself; \S2.6). The constructor afterwards repeats repair and trim over the whole population (\code{repair_all_individuals}, \code{trim_all_individuals}); these calls change nothing on sets that are already minimal zero forcing sets.
+\end{diff}
+
+
+\item Insert the repaired solution into the population.
+\begin{diff}
+Identical to source.
+\end{diff}
+
+\end{enumerate}
+Note that the repair procedure likely changes the size of the initial random sample by either adding vertices so that $S$ becomes a zero forcing set, or removing vertices so that $S$ is minimal.
+Moreover, while no repaired zero forcing $S$ will be smaller than $lb$, it may be larger than $ub$; indeed, minimal zero forcing sets can be larger than the incumbent upper bound. 
+\begin{diff}
+Identical to source.
+\end{diff}
+
+
+\subsection{Fitness Scores}
+Each population member gets a fitness score defines as follows
+\[
+f(S) = \alpha\cdot\left(\abs{V}-\abs{S}\right) + \frac{\beta}{\sum_{v\in V}w_{v}}\cdot\sum_{v\in S}w_{v},
+\]
+where $\alpha=1$ and $\beta=0.1$. 
+\begin{diff}
+Identical in effect: Both $\alpha$ and $\beta$ are parameters that can be tweaked.
+\end{diff}
+\noindent
+
+Therefore, the fitness score first prioritizes the size of the zero forcing set and second the relative weight of the forts it hits. 
+\begin{diff}
+Identical in effect: size dominates and the weight fraction breaks ties. \code{population_sorter} also ranks any non-forcing individual last, which is moot because every individual is repaired.
+\end{diff}
+
+
+\subsection{Repair Procedure}
+The repair procedure is an important aspect of this genetic algorithm because it both ensures that every member of the population is a zero forcing set and provides important fort information.
+Given a candidate set $S$, compute its closure $C=\cl{S}$.
+If $C=V$, then $S$ is already a zero forcing set and we apply the trim procedure to ensure $S$ is minimal.
+Otherwise, $C$ is a failed zero forcing set and $F=V\setminus C$ is a fort.
+\begin{diff}
+Difference to source. \code{repair_individual} returns at once when the candidate already forces; it does not apply trim, which the report does at this point. Why: I feel that these operations should be kept separate, even though they're always used together (for now); the callers (\code{initialize_population}, \code{crossover_individual}) call \code{trim_individual} after repair, so the composition is the same as in the report. The closure $C=\cl{S}$ and the fort $F=V\setminus C$ are computed as in the report.
+\end{diff}
+
+
+Let $\shuffle{F}$ denote a uniformly random permutation of the vertices in $F$.
+Also, let $z\in\{0,1\}$ denote a binary variable that indicates whether or not $S$ is a zero forcing set, initially $z=0$. 
+Then, for each $u\in\shuffle{F}$
+\begin{enumerate}
+\item If $u\notin C$, then set $C' = C\cup\{u\}$. 
+
+\item If $\cl{C'}= V$ and $z=0$, then update $S=S\cup\{u\}$ and $z=1$.
+
+\item If $\cl{C'}\neq V$, then update $C=\cl{C'}$; furthermore, if $z=0$ then update $S=S\cup\{u\}$.
+\end{enumerate}
+\begin{diff}
+Difference to source: The code shuffles all of $V$ and skips vertices already in the closure, which is step 1 on $\shuffle{F}$. It adds $u$ to $S$, recomputes the closure of the enlarged set (this equals $\cl{C\cup\{u\}}$ because $C=\cl{S}$), and remembers the complement of the latest failed closure as the fort (step 3). It stops at the first $u$ for which $S$ forces (step 2) instead of continuing through the rest of $F$; there is no variable $z$, since nothing is done after that point. The resulting set $S$ is the same as in the report. What differs is the fort: the report's loop would go on extending $C$ until it is a maximal failed set (a minimal fort), whereas the code keeps the complement of the last failed closure, which is a fort but not necessarily minimal, one per repair call. Why: the maximal-failed-set phase was moved into \code{trim_fort}, run once per distinct fort in \code{trim_all_forts}, so that no closure computations are spent in the repair loop after $S$ already forces.
+\end{diff}
+
+Once all vertices in $F$ have been considered, the set $C$ is a maximal failed zero forcing set, $F=V\setminus C$ is a minimal fort, and $S$ is a zero forcing set.
+We ensure that $S$ is a minimal zero forcing set by applying the trim procedure. 
+\begin{diff}
+Difference to source. After \code{repair_individual}, $S$ forces but is not yet minimal, and the stored fort is not yet minimal either. $S$ becomes minimal through the separate \code{trim_individual} call. The fort becomes minimal in \code{trim_all_forts}: \code{trim_fort} starts from $C=V\setminus F$, visits the vertices in uniformly random order, and for each vertex outside $C$ keeps the closure of $C\cup\{u\}$ while it still fails (undoing the addition when it would complete $V$); it ends with a maximal failed set whose complement is a minimal fort. This is the report's construction, run from a new random order (inferred). Net effect: $S$ and $F$ are both minimal when they are used.
+\end{diff}
+
+
+\subsection{Trim Procedure}
+The trim procedure takes a zero forcing set $S$ and removes as many vertices as possible while maintaining the zero forcing property. 
+In particular, let $\shuffle{S}$ denote a uniformly random permutation of the vertices in $S$.
+Then, for each $u\in\shuffle{S}$
+\begin{enumerate}
+\item Let $S'=S\setminus\{u\}$.
+
+\item If $\cl{S'}=V$, then update $S=S'$. 
+\end{enumerate}
+Once all vertices in $S$ have been considered, the updated set $S$ is a minimal zero forcing set. 
+\begin{diff}
+Identical to source.
+\end{diff}
+
+
+\section{Generational Evolution}
+The genetic algorithm evolves its population generation by generation. 
+The initial population is considered generation $0$.
+Let $g\geq 0$ denote the generation number and let 
+\[
+\mathcal{P}_{g} = \left\{S_{1}^{(g)},S_{2}^{(g)},\ldots,S_{10}^{(g)}\right\}
+\]
+denote the population at generation $g$, where $S_{1}^{(g)},S_{2}^{(g)},\ldots,S_{10}^{(g)}$ are the members of the population (zero forcing sets) ordered from largest to smallest fitness scores. 
+\begin{diff}
+Identical to source in effect: Except that the population size is a parameter (\S2.4). The population is a vector kept sorted from best to worst by \code{population_sorter}, and the initial population is generation $0$.
+\end{diff}
+
+
+The top $10\%$ of the population, $S_{1}^{(g)}$, are considered the elite members of the population at generation $g$. 
+We update the remaining $90\%$ of the population through the selection, crossover, and replacement events. 
+\begin{diff}
+Identical to source in effect: For $p=10$: the number of elites is the larger of 1 and $\lfloor 0.1\,p\rfloor$, which is one elite, copied unchanged; the rest of the next population is built by selection, crossover and replacement. For other $p$ the elite count is $\lfloor 0.1\,p\rfloor$ with a minimum of 1.
+\end{diff}
+
+
+\subsection{Selection}
+In the selection process, two members of the population are selected to construct a new member of the population via crossover.
+The members are selected as follows: A uniformly random sample of size $3$ is taken from the population $\mathcal{P}_{g}$.
+Then, all $\binom{3}{2}$ combinations are scored based on their combined fitness and symmetric Difference to source:
+\[
+s\left(S_{i}^{(g)},S_{j}^{(g)}\right) = \frac{\gamma}{f(S_{1}^{(g)})}\cdot\left(f(S_{i}^{(g)})+f(S_{j}^{(g)})\right) + \delta\cdot\left(1 - \frac{\abs{S_{i}^{(g)}\cap S_{j}^{(g)}}}{\abs{S_{i}^{(g)}\cup S_{j}^{(g)}}}\right),
+\]
+where $\left(1-\frac{\abs{A\cap B}}{\abs{A\cup B}}\right)$ is the Jaccard distance between $A$ and $B$, $\gamma=1$, and $\delta=0.1$.
+\begin{diff}
+Identical in effect: $\gamma$ and $\delta$ are parameters that can be tweaked.
+\end{diff}
+
+
+\subsection{Crossover}
+Once two members of the population have been selected, say $S_{i}^{(g)}$ and $S_{j}^{(g)}$, the crossover process constructs a new member of the population.
+Let $H\subseteq V\setminus\left(S_{i}^{(g)}\cup S_{j}^{(g)}\right)$ denote a weight-biased random sample of a random size.
+\begin{diff}
+Identical to source.
+\end{diff}
+\noindent
+
+Also, let $r=3$ and $\Delta r=\ceil{\frac{ub-lb}{r}}$.
+Then, for each 
+\[
+k\in\left\{lb,lb+\Delta r,lb+2\Delta r,\ldots,lb+(r-1)\Delta r\right\}
+\]
+\begin{diff}
+Identical in effect: $r$ is a parameter that can be tweaked. The same indexing logic that was used looping over to initialize the population is used changed (but with $r$ instead of $\code{config.population_size}$
+\end{diff}
+
+\begin{enumerate}
+\item Generate a weight-biased random subset $S\subseteq S_{i}^{(g)}\cup S_{j}^{(g)}\cup H$ with $\abs{S}=k$.
+\begin{diff}
+Identical to source.
+\end{diff}
+
+
+\item Apply the repair procedure.
+\begin{diff}
+Identical in effect: Each child goes through \code{repair_individual} and then \code{trim_individual}. Every repair contributes one fort, so 8 offspring with $r=3$ give about $24=8r$ forts per generation, as in the report.
+\end{diff}
+
+\end{enumerate}
+After all $k$ have been considered, store the zero forcing set that has the highest fitness score. 
+\begin{diff}
+Identical to source.
+\end{diff}
+
+
+\subsection{Replacement}
+Suppose that the selection and crossover processes have been repeated $8$ times.
+Then, there are approximately $8r$ minimal forts that have been constructed from the repair function. 
+Let $\mathcal{F}_{g}$ denote the (distinct) minimal forts that have been encountered during generation $g\geq 0$. 
+We use these minimal forts to update the vertex weights and to construct one more zero forcing set to be added to the population.
+\begin{diff}
+Identical in effect: Identical for the 8 crossover offspring, the distinct minimal forts $\mathcal{F}_g$ (\code{trim_all_forts}) and the weight update (\code{acknowledge_all_forts}). The ``one more zero forcing set'' is not optionally added, which can be tweaked.
+\end{diff}
+
+
+Define $Z_{g}(G)$ to be the minimum size of a set of vertices $S$ such that $S\cap F\neq\emptyset$ for all $F\in\mathcal{F}_{G}$. 
+Note that $Z_{g}(G)\leq Z(G)$.
+Moreover, $Z_{g}(G)$ can be computed as a fort cover model IP over the forts in $\mathcal{F}_{g}$; since the number of minimal forts in $\mathcal{F}_{g}$ is at most $8r$, this model will likely finish quickly even on large graphs.
+\begin{diff}
+Difference to source: As of now, \code{minimum_hitting_set} is a brute-force branch and bound: a greedy cover gives an upper bound, then an exhaustive search branches on the vertices of the smallest unhit fort. The report asks for an integer program. The call (and with it $Z_g(G)$, the lower-bound update and the extra individual) is commented out in \code{crossover_all_individuals}. Why: I saw it was too slow, saw no improvement. The only thing it provides is a lower bound, but not a very tight one. In my testing, on a random graph with 80\% edge weight, it only reached a lower bound of ~6, when Z(G) is closer to ~40.
+\end{diff}
+\noindent
+
+Once the model completes, we have an optimal set $S$ that hits every fort in $\mathcal{F}_{g}$.
+While $S$ hits every fort in $\mathcal{F}_{g}$, it may not not be a zero forcing set of $G$. 
+In this case, we apply the repair function to $S$.
+\begin{diff}
+Identical to source.
+\end{diff}
+
+
+At this point, we have constructed $9$ minimal zero forcing sets that are used to update population members $S_{2}^{(g)},\ldots,S_{10}^{(g)}$. 
+\begin{diff}
+Identical in effect: The generated minimal set can optionally not be created, in which case all of the children will be generated via crossover.
+\end{diff}
+
+Upon updating the members of the population, we are now in generation $g+1$.
+At this point, we re-order the population from largest to smallest fitness, discard the forts observed in the previous generation, and we update $lb=\max\{lb,Z_{g}(G)\}$ and 
+\[
+ub = \min\left\{ub,\abs{S_{1}^{(g+1)}},\abs{S_{2}^{(g+1)}},\ldots,\abs{S_{10}^{(g+1)}}\right\}.
+\]
+\begin{diff}
+Identical in effect.
+\end{diff}
+
+\begin{diff}
+Code with no counterpart in the report. \code{GeneticSolverInfo} and \code{update_info} record the best individual, best score, best size, population variance and ``since better'' counters; \code{run} and \code{kill} drive the generations with a stop flag; \code{force_lower_bound} and \code{force_upper_bound} let other components tighten the bounds. None of these changes the search by itself: there are no adaptive rates and no restarts. \code{Individual} caches its closure and propagation time (the propagation time is not used by the fitness). Why: monitoring and cooperation with an external solver such as the Gurobi program in \code{fort_cover.cpp}.
+\end{diff}
+
+\begin{diff}
+Edge cases in the current code that are not different from the report. (1) \code{crossover_individual} draws the size of $H$ from $[1,\,n-|S_i\cup S_j|]$; if the parents already cover $V$ this range is empty and the distribution is invalid. (2) \code{select_parents} compares pair scores with a strict $>$ against an initial value of 0 and leaves the parent pointers uninitialized; if every pair scored 0 or less, or if fewer than two individuals were sampled (graphs with one vertex), undefined behavior would follow. (3) If the hitting-set block is re-enabled, its call to \code{force_lower_bound(cover.count())} is only valid for an optimal cover.
+\end{diff}
+
+
+\end{document}

@@ -1,5 +1,7 @@
 #include "genetic_solver.hpp"
+
 #include "weighted_sampler.hpp"
+#include "zero_forcing.hpp"
 #include "graph.hpp"
 
 #include <functional>
@@ -9,9 +11,16 @@
 
 // ------------------------------------------------------------------------------------------------
 
-Individual::Individual(const Graph *gi, const WeightedSampler *si, const VertexBitset &ii) :
+GeneticSolverConfig::GeneticSolverConfig(std::size_t psi) {
+  population_size = psi;
+}
+
+// ------------------------------------------------------------------------------------------------
+
+Individual::Individual(const Graph *gi, const WeightedSampler *si, const GeneticSolverConfig *ci, const VertexBitset &ii) :
   graph(gi),
   sampler(si),
+  _config(ci),
   _initial(gi->order()),
   closure(gi->order()),
   pt(0),
@@ -20,9 +29,10 @@ Individual::Individual(const Graph *gi, const WeightedSampler *si, const VertexB
   initial(ii);
 }
 
-Individual::Individual(const Graph *gi, const WeightedSampler *si) :
+Individual::Individual(const Graph *gi, const WeightedSampler *si, const GeneticSolverConfig *ci) :
   graph(gi),
   sampler(si),
+  _config(ci),
   _initial(gi->order()),
   closure(gi->order()),
   pt(0),
@@ -50,30 +60,18 @@ VertexBitset Individual::initial() const {
 }
 
 double Individual::score() {
-  const std::size_t n = graph->order();
-  const std::size_t z = _initial.count();
-  const double size_term = static_cast<double>(n - (z > n ? n : z));
-  constexpr double alpha = 1.0;
-  constexpr double beta = 0.1;
+  double size_term = graph->order() - _initial.count();
 
-  if (n == 0) return 0.0;
-
-  double total_weight = 0.0;
   double selected_weight = 0.0;
-  for (Vertex u = 0; u < n; ++u) {
+  double total_weight = 0.0;
+  for (Vertex u = 0; u < graph->order(); ++u) {
     const double w = sampler->get_weight(u);
-    if (!std::isfinite(w) || w <= 0.0) {
-      // Treat an invalid weight vector as the paper's uniform initial state.
-      return alpha * size_term + beta * static_cast<double>(z) / static_cast<double>(n);
-    }
     total_weight += w;
-    if (_initial.test(u)) selected_weight += w;
+    if (!_initial.test(u)) continue;
+    selected_weight += w;
   }
-  if (!(total_weight > 0.0) || !std::isfinite(total_weight) ||
-      !std::isfinite(selected_weight)) {
-    return alpha * size_term + beta * static_cast<double>(z) / static_cast<double>(n);
-  }
-  return alpha * size_term + beta * (selected_weight / total_weight);
+
+  return _config->alpha * size_term + _config->beta * (selected_weight / total_weight);
 }
 
 std::size_t Individual::z() {
@@ -87,8 +85,8 @@ bool Individual::forces() {
 
 // ------------------------------------------------------------------------------------------------
 
-GeneticSolverInfo::GeneticSolverInfo(const Graph *gi, const WeightedSampler *si) :
-  _best_individual(gi, si),
+GeneticSolverInfo::GeneticSolverInfo(const Graph *gi, const WeightedSampler *si, const GeneticSolverConfig *ci) :
+  _best_individual(gi, si, ci),
   _best_variance(1.0),
   _best_score(0),
   _best_z(gi->order()),
@@ -342,11 +340,12 @@ bool population_sorter(Individual &a, Individual &b) {
   return a.score() > b.score();
 }
 
-GeneticSolver::GeneticSolver(const Graph *gi, std::size_t psi) :
+GeneticSolver::GeneticSolver(const Graph *gi, GeneticSolverConfig config) :
   graph(gi),
   sampler(gi),
-  _info(gi, &sampler),
-  population(std::max<std::size_t>(3, psi), Individual(gi, &sampler)),
+  _config(config),
+  _info(gi, &sampler, &config),
+  population(std::max<std::size_t>(3, config.population_size), Individual(gi, &sampler, &config)),
   gen(std::random_device{}()),
   known_forts({}),
   dead(true)
@@ -356,13 +355,10 @@ GeneticSolver::GeneticSolver(const Graph *gi, std::size_t psi) :
   trim_all_individuals();
   trim_all_forts();
   acknowledge_all_forts();
-  
-  _info._best_individual = population.front();
-  _info._best_variance = variance();
-  _info._best_score = population.front().score();
-  _info._best_z = population.front().z();
-  force_upper_bound(_info._best_z);
-  _info._variance = variance();
+  update_info();
+
+  _config.population_size = std::max(_config.population_size, 3UL);
+  _config.tournament_size = std::min(_config.tournament_size, graph->order());
 }
 
 // MATCHES SOURCE (2.4)
@@ -370,7 +366,7 @@ void GeneticSolver::initialize_population() {
   double step = static_cast<double>(_info._upper_bound - _info._lower_bound) / (population.size() - 1);
   for (std::size_t a = 0; a < population.size(); a++) {
     std::size_t k = _info._lower_bound + a * step;
-    VertexBitset subset = sampler.sample_bitset(k, VertexBitset(graph->order()));
+    VertexBitset subset = sampler.sample(k, VertexBitset(graph->order()));
     population[a].initial(subset);
     repair_individual(population[a]);
     trim_individual(population[a]);
@@ -380,16 +376,11 @@ void GeneticSolver::initialize_population() {
 
 // MATCHES SOURCE (3.1)
 std::pair<Individual&, Individual&> GeneticSolver::select_parents() {
-  const std::size_t TOURNAMENT_SIZE = 3;
-  const double GAMMA = 1.0;
-  const double DELTA = 0.1;
-
-  std::size_t tournament_size = std::min(TOURNAMENT_SIZE, graph->order());
   std::uniform_int_distribution<std::size_t> dist(0, population.size() - 1);
   std::vector<std::size_t> indices;
-  indices.reserve(tournament_size);
+  indices.reserve(_config.tournament_size);
 
-  while (indices.size() < tournament_size) {
+  while (indices.size() < _config.tournament_size) {
     std::size_t candidate = dist(gen);
     if (std::find(indices.begin(), indices.end(), candidate) != indices.end()) continue;
     indices.push_back(candidate);
@@ -403,10 +394,10 @@ std::pair<Individual&, Individual&> GeneticSolver::select_parents() {
     for (std::size_t b = a + 1; b < indices.size(); b++) {
       Individual &ind1 = population[indices[a]];
       Individual &ind2 = population[indices[b]];
-      double fitness = GAMMA / _info.best_score() * (ind1.score() + ind2.score());
+      double fitness = _config.gamma / population.front().score() * (ind1.score() + ind2.score());
       double andr = (ind1.initial() & ind2.initial()).count();
       double orr = (ind1.initial() | ind2.initial()).count();
-      double jaccard = DELTA * (1 - andr / orr);
+      double jaccard = _config.delta * (1 - andr / orr);
       double score = fitness + jaccard;
 
       if (score <= curr_score) continue;
@@ -421,20 +412,18 @@ std::pair<Individual&, Individual&> GeneticSolver::select_parents() {
 
 // MATCHES SOURCE (3.2)
 Individual GeneticSolver::crossover_individual(Individual &ind1, Individual &ind2) {
-  const std::size_t R = 3;
-
-  Individual best_child(graph, &sampler);
-  Individual child(graph, &sampler);
+  Individual best_child(graph, &sampler, &_config);
+  Individual child(graph, &sampler, &_config);
 
   VertexBitset sample_space0 = ind1.initial() | ind2.initial();
   std::uniform_int_distribution<std::size_t> dist(1, graph->order() - sample_space0.count());
-  VertexBitset epsilon = sampler.sample_bitset(dist(gen), sample_space0);
+  VertexBitset epsilon = sampler.sample(dist(gen), sample_space0);
   VertexBitset sample_space1 = sample_space0 | epsilon;
 
-  double step = static_cast<double>(_info._upper_bound - _info._lower_bound) / R;
-  for (std::size_t a = 0; a < R; a++) {
+  double step = static_cast<double>(_info._upper_bound - _info._lower_bound) / _config.r;
+  for (std::size_t a = 0; a < _config.r; a++) {
     std::size_t k = _info._lower_bound + a * step;
-    child.initial(sampler.sample_bitset(k, ~sample_space1));
+    child.initial(sampler.sample(k, ~sample_space1));
     repair_individual(child);
     trim_individual(child);
     if (child.score() > best_child.score()) best_child = child;
@@ -444,12 +433,6 @@ Individual GeneticSolver::crossover_individual(Individual &ind1, Individual &ind
 }
 
 // MATCHES SOURCE ~ (3.3)
-// Uses a brute force hitting set problem,
-// rather than an IP model for finding the
-// final child. Currently, it does not even
-// do that. My rationale is that it is too slow,
-// and shows no improvement. Could be that my hitting
-// set calculator is just not working
 void GeneticSolver::crossover_all_individuals() {
   std::vector<Individual> next_population;
   next_population.reserve(population.size());
@@ -457,7 +440,7 @@ void GeneticSolver::crossover_all_individuals() {
   std::size_t elites = std::max(1.0, population.size() * 0.1);
   next_population.insert(next_population.end(), population.begin(), population.begin() + elites);
 
-  std::size_t offspring_count = population.size() - elites - 1;
+  std::size_t offspring_count = population.size() - elites - _config.perform_hitting_set;
   for (std::size_t a = 0; a < offspring_count; a++) {
     auto [parent1, parent2] = select_parents();
     Individual child = crossover_individual(parent1, parent2);
@@ -466,12 +449,15 @@ void GeneticSolver::crossover_all_individuals() {
 
   trim_all_forts();
 
-  VertexBitset cover = minimum_hitting_set(*graph, known_forts);
-  force_lower_bound(cover.count());
+  if (_config.perform_hitting_set) {
+    VertexBitset cover = minimum_hitting_set(*graph, known_forts);
+    force_lower_bound(cover.count());
 
-  Individual cover_ind(graph, &sampler, cover);
-  repair_individual(cover_ind);
-  next_population.emplace_back(cover_ind);
+    Individual cover_ind(graph, &sampler, &_config, cover);
+    repair_individual(cover_ind);
+    trim_individual(cover_ind);
+    next_population.emplace_back(cover_ind);
+  }
 
   acknowledge_all_forts();
 
@@ -484,8 +470,6 @@ void GeneticSolver::crossover_all_individuals() {
 }
 
 // MATCHES SOURCE ~ (2.6)
-// Does not trim the child at the end
-// These are distinct operations
 void GeneticSolver::repair_individual(Individual &ind) {
   if (ind.forces()) return;
 
@@ -579,12 +563,8 @@ void GeneticSolver::trim_all_forts() {
   known_forts = std::move(next_forts);
 }
 
-void GeneticSolver::acknowledge_fort(const VertexBitset &fort) {
-  sampler.update_weights(fort);
-}
-
 void GeneticSolver::acknowledge_all_forts() {
-  for (const VertexBitset &fort : known_forts) acknowledge_fort(fort);
+  sampler.update_weights(known_forts);
   known_forts.clear();
 }
 
@@ -638,6 +618,10 @@ void GeneticSolver::force_upper_bound(std::size_t ub) {
 void GeneticSolver::force_lower_bound(std::size_t lb) {
   lb = std::min(std::max(lb, _info._lower_bound), _info._upper_bound);
   _info._lower_bound = std::max(lb, _info._lower_bound);
+}
+
+GeneticSolverConfig GeneticSolver::config() const {
+  return _config;
 }
 
 GeneticSolverInfo GeneticSolver::info() const {

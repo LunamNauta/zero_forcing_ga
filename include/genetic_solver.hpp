@@ -1,30 +1,50 @@
 #ifndef GENETIC_SOLVER_HEADER
 #define GENETIC_SOLVER_HEADER
 
-#include "../include/zero_forcing.hpp"
-#include "../include/graph.hpp"
 #include "weighted_sampler.hpp"
+#include "graph.hpp"
 
-#include <atomic>
-#include <cmath>
 #include <cstddef>
 #include <random>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
-using Gene = VertexBitset;
+struct GeneticSolverConfig {
+  std::size_t population_size = 10;
+
+  // GeneticSolver::select_parents
+  std::size_t tournament_size = 3;
+  double gamma = 0.8;
+  double delta = 0.1;
+
+  // Individual::score
+  double alpha = 0.9;
+  double beta = 0.1;
+
+  // GeneticSolver::crossover_individual
+  std::size_t r = 3;
+
+  // GeneticSolver::crossover_all_individuals
+  // Usually keep disabled. Allows calculation of lower bounds
+  // Only gets ~10% of the way to Z(G), making it largely a
+  // waste of CPU cycles
+  bool perform_hitting_set = false;
+
+  GeneticSolverConfig(std::size_t psi);
+};
 
 struct Individual {
   const Graph *graph;
   const WeightedSampler *sampler;
+  const GeneticSolverConfig *_config;
   VertexBitset _initial;
   VertexBitset closure;
   std::size_t pt;
   bool dirty;
 
-  Individual(const Graph *gi, const WeightedSampler *si, const VertexBitset &ii);
-  Individual(const Graph *gi, const WeightedSampler *si);
+  Individual(const Graph *gi, const WeightedSampler *si, const GeneticSolverConfig *ci, const VertexBitset &ii);
+  Individual(const Graph *gi, const WeightedSampler *si, const GeneticSolverConfig *ci);
 
   void update();
 
@@ -52,7 +72,7 @@ private:
   std::size_t _lower_bound;
 
 public:
-  GeneticSolverInfo(const Graph *gi, const WeightedSampler *si);
+  GeneticSolverInfo(const Graph *gi, const WeightedSampler *si, const GeneticSolverConfig *ci);
 
   Individual best_individual() const;
   double best_variance() const;
@@ -75,6 +95,7 @@ class GeneticSolver {
 private:
   const Graph *graph;
   WeightedSampler sampler;
+  GeneticSolverConfig _config;
   GeneticSolverInfo _info;
   std::vector<Individual> population;
   std::mt19937 gen;
@@ -96,19 +117,20 @@ private:
   void trim_fort(VertexBitset &fort);
   void trim_all_forts();
 
-  void acknowledge_fort(const VertexBitset &fort);
   void acknowledge_all_forts();
 
   void update_info();
   double variance() const;
 
 public:
-  GeneticSolver(const Graph *gi, std::size_t psi);
+  GeneticSolver(const Graph *gi, GeneticSolverConfig config);
 
   void force_upper_bound(std::size_t ub);
   void force_lower_bound(std::size_t lb);
 
+  GeneticSolverConfig config() const;
   GeneticSolverInfo info() const;
+
   void run(std::size_t generations);
   void kill();
 };
