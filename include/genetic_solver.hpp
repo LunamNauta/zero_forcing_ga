@@ -31,6 +31,12 @@ struct GeneticSolverConfig {
   // waste of CPU cycles
   bool perform_hitting_set = false;
 
+  bool repair_in_init = true;
+  bool repair_in_crossover = true;
+
+  bool trim_in_init = true;
+  bool trim_in_crossover = true;
+
   GeneticSolverConfig(std::size_t psi);
 };
 

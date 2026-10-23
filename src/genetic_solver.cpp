@@ -351,10 +351,6 @@ GeneticSolver::GeneticSolver(const Graph *gi, GeneticSolverConfig config) :
   dead(true)
 {
   initialize_population();
-  repair_all_individuals();
-  trim_all_individuals();
-  trim_all_forts();
-  acknowledge_all_forts();
   update_info();
 
   _config.population_size = std::max(_config.population_size, 3UL);
@@ -368,10 +364,13 @@ void GeneticSolver::initialize_population() {
     std::size_t k = _info._lower_bound + a * step;
     VertexBitset subset = sampler.sample(k, VertexBitset(graph->order()));
     population[a].initial(subset);
-    repair_individual(population[a]);
-    trim_individual(population[a]);
+    if (_config.repair_in_init) repair_individual(population[a]);
+    if (_config.trim_in_init) trim_individual(population[a]);
   }
   std::sort(population.begin(), population.end(), population_sorter);
+
+  trim_all_forts();
+  acknowledge_all_forts();
 }
 
 // MATCHES SOURCE (3.1)
@@ -420,13 +419,17 @@ Individual GeneticSolver::crossover_individual(Individual &ind1, Individual &ind
   VertexBitset epsilon = sampler.sample(dist(gen), sample_space0);
   VertexBitset sample_space1 = sample_space0 | epsilon;
 
+  best_child.initial(sample_space1);
+  if (_config.repair_in_crossover) repair_individual(best_child);
+  if (_config.trim_in_crossover) trim_individual(best_child);
+
   double step = static_cast<double>(_info._upper_bound - _info._lower_bound) / _config.r;
   for (std::size_t a = 0; a < _config.r; a++) {
     std::size_t k = _info._lower_bound + a * step;
     child.initial(sampler.sample(k, ~sample_space1));
-    repair_individual(child);
-    trim_individual(child);
-    if (child.score() > best_child.score()) best_child = child;
+    if (_config.repair_in_crossover) repair_individual(child);
+    if (_config.trim_in_crossover) trim_individual(child);
+    if (child.forces() && child.score() > best_child.score()) best_child = child;
   }
 
   return best_child;
