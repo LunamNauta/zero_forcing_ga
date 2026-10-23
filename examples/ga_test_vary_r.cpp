@@ -90,9 +90,8 @@ static SuiteResults test_graph_suite(
         break;
       }
     }
-
-    const std::size_t expected = zero_forcing_wavefront(graph);
     const std::size_t actual = solver.info().best_z();
+    const std::size_t expected = zero_forcing_wavefront(graph);
 
     // Avoid unsigned subtraction: it would wrap if actual < expected.
     if (actual < expected) {
